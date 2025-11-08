@@ -17,7 +17,6 @@
 
 #define VIDEO_PIN   26
 #define AUDIO_PIN   18  // can be any pin
-#define IR_PIN      0   // TSOP4838 or equivalent on any pin if desired
 
 int _pal_ = 0;
 
@@ -42,10 +41,6 @@ int _pal_ = 0;
 #include "driver/gpio.h"
 #include "driver/i2s.h"
 #include "driver/ledc.h"  // add at top of video_out.h
-
-#ifdef IR_PIN
-#include "ir_input.h"  // ir peripherals
-#endif
 
 
 //====================================================================================================
@@ -121,18 +116,16 @@ static esp_err_t start_dma(int line_width,int samples_per_cc, int ch = 1)
 
 	if (!_pal_) {
 		switch (samples_per_cc) {
-			case 3:
-				rtc_clk_apll_enable(true);
-				rtc_clk_apll_coeff_set(2, 0x46, 0x97, 0x4);  // o_div=2, sdm0=0x46, sdm1=0x97, sdm2=0x4
-				break;
-			case 4:
-				rtc_clk_apll_enable(true);
-				rtc_clk_apll_coeff_set(1, 0x46, 0x97, 0x4);  // o_div=1, sdm0=0x46, sdm1=0x97, sdm2=0x4
-				break;
+		case 3:
+			// old API: enable APLL and set coefficients in one call
+			rtc_clk_apll_enable(1, 0x46, 0x97, 0x4, 2);
+			break;
+		case 4:
+			rtc_clk_apll_enable(1, 0x46, 0x97, 0x4, 1);
+			break;
 		}
 	} else {
-		rtc_clk_apll_enable(true);
-		rtc_clk_apll_coeff_set(1, 0x04, 0xA4, 0x6);  // o_div=1, sdm0=0x04, sdm1=0xA4, sdm2=0x6
+		rtc_clk_apll_enable(1, 0x04, 0xA4, 0x6, 1);
 	}
 
     I2S0.clkm_conf.clkm_div_num = 1;            // I2S clock divider’s integral value.
@@ -175,15 +168,9 @@ void video_init_hw(int line_width, int samples_per_cc)
     //                   |
     //                   v gnd
 
-	ledcAttachChannel(AUDIO_PIN, 2000000 /*freq*/, 7 /*resolution*/, 0 /*channel*/);
-	// or simply ledcAttach(AUDIO_PIN, 2000000, 7) if you don't care which channel is used:contentReference[oaicite:3]{index=3}.
-	ledcWriteChannel(0, 0);  // start with duty 0
-    ledcWrite(0,0);
-
-    //  IR input if used
-#ifdef IR_PIN
-    pinMode(IR_PIN,INPUT);
-#endif
+	ledcSetup(0, 2000000, 7);
+	ledcAttachPin(AUDIO_PIN, 0);
+	ledcWrite(0, 0);
 }
 
 // send an audio sample every scanline (15720hz for ntsc, 15600hz for PAL)
@@ -241,7 +228,7 @@ void* MALLOC32(int x, const char* label)
     else
         printf("MALLOC32 allocation of %s:%d %08X\n",label,x,r);
     return r;
-}
+}c:\Users\turlo\Documents\GitHub\esp_8_bit\src\emu.h
 
 #else
 
@@ -264,7 +251,7 @@ uint32_t xthal_get_ccount() {
 
 void audio_sample(uint8_t s);
 
-void ir_sample();
+//void ir_sample();
 
 int get_hid_ir(uint8_t* buf)
 {
@@ -804,9 +791,6 @@ void IRAM_ATTR video_isr(volatile void* vbuf)
     audio_sample(s);
     //audio_sample(_sin64[_x++ & 0x3F]);
 
-#ifdef IR_PIN
-    ir_sample();
-#endif
 
     int i = _line_counter++;
     uint16_t* buf = (uint16_t*)vbuf;

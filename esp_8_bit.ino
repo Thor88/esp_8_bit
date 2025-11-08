@@ -1,4 +1,4 @@
-/*
+/*hid_update
  * esp_8_bit
  *
  * Atari 8‑bit computers, NES and SMS game consoles on your TV with
@@ -30,7 +30,7 @@
 #define VIDEO_STANDARD NTSC
 
 //  Choose one of the following emulators: EMU_NES,EMU_SMS,EMU_ATARI
-#define EMULATOR EMU_ATARI
+#define EMULATOR EMU_NES
 
 //  Many emus work fine on a single core (S2), file system access can cause a little flickering
 //  #define SINGLE_CORE
@@ -40,12 +40,6 @@ Emu* NewEmulator()
 {
   #if (EMULATOR==EMU_NES)
   return NewNofrendo(VIDEO_STANDARD);
-  #endif
-  #if (EMULATOR==EMU_SMS)
-  return NewSMSPlus(VIDEO_STANDARD);
-  #endif
-  #if (EMULATOR==EMU_ATARI)
-  return NewAtari800(VIDEO_STANDARD);
   #endif
   printf("Must choose one of the following emulators: EMU_NES,EMU_SMS,EMU_ATARI\n");
 }
@@ -114,7 +108,6 @@ void setup()
   setCpuFrequencyMhz(240);
   mount_filesystem();                       // mount the filesystem!
   _emu = NewEmulator();                     // create the emulator!
-  hid_init("emu32");                        // bluetooth hid on core 1!
   bluepad_setup();                          // initialise Bluepad32 for gamepad support
 
   #ifdef SINGLE_CORE
@@ -134,7 +127,7 @@ void perf()
     _next = _drawn + 120;
 
     printf("frame_time:%d drawn:%d displayed:%d blit_ticks:%d->%d, isr time:%2.2f%%\n",
-      _frame_time/240,_drawn,_frame_counter,_blit_ticks_min,_blit_ticks_max,(_isr_us*100)/elapsed_us);
+      _frame_time/240,_drawn,_frame_counter,_blit_ticks_min,_blit_ticks_max,(_isc:\Users\turlo\Documents\GitHub\esp_8_bit\src\video_out.hr_us*100)/elapsed_us);
 
     _blit_ticks_min = 0xFFFFFFFF;
     _blit_ticks_max = 0;
@@ -162,9 +155,6 @@ void loop()
     }
   }
   #endif
-
-  // update the bluetooth edr/hid stack
-  hid_update();
 
   // update modern gamepads via Bluepad32
   bluepad_update();
