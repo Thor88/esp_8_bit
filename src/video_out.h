@@ -41,6 +41,7 @@ int _pal_ = 0;
 #include "driver/dac.h"
 #include "driver/gpio.h"
 #include "driver/i2s.h"
+#include "driver/ledc.h"  // add at top of video_out.h
 
 #ifdef IR_PIN
 #include "ir_input.h"  // ir peripherals
@@ -63,7 +64,7 @@ void IRAM_ATTR video_isr(volatile void* buf);
 void IRAM_ATTR i2s_intr_handler_video(void *arg)
 {
     if (I2S0.int_st.out_eof)
-        video_isr(((lldesc_t*)I2S0.out_eof_des_addr)->buf); // get the next line of video
+        video_isr((volatile void*)((lldesc_t*)I2S0.out_eof_des_addr)->buf); // get the next line of video
     I2S0.int_clr.val = I2S0.int_st.val;                     // reset the interrupt
 }
 
@@ -118,14 +119,21 @@ static esp_err_t start_dma(int line_width,int samples_per_cc, int ch = 1)
     //  up to 20mhz seems to work ok:
     //  rtc_clk_apll_enable(1,0x00,0x00,0x4,0);   // 20mhz for fancy DDS
 
-    if (!_pal_) {
-        switch (samples_per_cc) {
-            case 3: rtc_clk_apll_enable(1,0x46,0x97,0x4,2);   break;    // 10.7386363636 3x NTSC (10.7386398315mhz)
-            case 4: rtc_clk_apll_enable(1,0x46,0x97,0x4,1);   break;    // 14.3181818182 4x NTSC (14.3181864421mhz)
-        }
-    } else {
-        rtc_clk_apll_enable(1,0x04,0xA4,0x6,1);     // 17.734476mhz ~4x PAL
-    }
+	if (!_pal_) {
+		switch (samples_per_cc) {
+			case 3:
+				rtc_clk_apll_enable(true);
+				rtc_clk_apll_coeff_set(2, 0x46, 0x97, 0x4);  // o_div=2, sdm0=0x46, sdm1=0x97, sdm2=0x4
+				break;
+			case 4:
+				rtc_clk_apll_enable(true);
+				rtc_clk_apll_coeff_set(1, 0x46, 0x97, 0x4);  // o_div=1, sdm0=0x46, sdm1=0x97, sdm2=0x4
+				break;
+		}
+	} else {
+		rtc_clk_apll_enable(true);
+		rtc_clk_apll_coeff_set(1, 0x04, 0xA4, 0x6);  // o_div=1, sdm0=0x04, sdm1=0xA4, sdm2=0x6
+	}
 
     I2S0.clkm_conf.clkm_div_num = 1;            // I2S clock divider’s integral value.
     I2S0.clkm_conf.clkm_div_b = 0;              // Fractional clock divider’s numerator value.
@@ -167,8 +175,9 @@ void video_init_hw(int line_width, int samples_per_cc)
     //                   |
     //                   v gnd
 
-    ledcSetup(0,2000000,7);    // 625000 khz is as fast as we go w 7 bits
-    ledcAttachPin(AUDIO_PIN, 0);
+	ledcAttachChannel(AUDIO_PIN, 2000000 /*freq*/, 7 /*resolution*/, 0 /*channel*/);
+	// or simply ledcAttach(AUDIO_PIN, 2000000, 7) if you don't care which channel is used:contentReference[oaicite:3]{index=3}.
+	ledcWriteChannel(0, 0);  // start with duty 0
     ledcWrite(0,0);
 
     //  IR input if used

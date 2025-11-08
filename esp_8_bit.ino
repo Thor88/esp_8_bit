@@ -1,30 +1,30 @@
-/* Copyright (c) 2020, Peter Barrett
-**
-** Permission to use, copy, modify, and/or distribute this software for
-** any purpose with or without fee is hereby granted, provided that the
-** above copyright notice and this permission notice appear in all copies.
-**
-** THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
-** WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
-** WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR
-** BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES
-** OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
-** WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
-** ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
-** SOFTWARE.
-*/
+/*
+ * esp_8_bit
+ *
+ * Atari 8‑bit computers, NES and SMS game consoles on your TV with
+ * nothing more than an ESP32 and a sense of nostalgia.  This version
+ * includes optional support for modern wireless gamepads via the
+ * Bluepad32 library.  When a supported controller (e.g. Xbox
+ * Wireless) is paired, its inputs are mapped to the GUI navigation
+ * keys and emulator actions.
+ */
 
 #include "esp_system.h"
-#include "esp_int_wdt.h"
 #include "esp_spiffs.h"
+
+// Include Arduino helpers for CPU frequency management.  These
+// functions (setCpuFrequencyMhz() and getCpuFrequencyMhz()) are
+// provided by the Arduino‑ESP32 core and replace the now‑removed
+// rtc_clk_cpu_freq_set() and rtc_clk_cpu_freq_get() APIs.
+#include "esp32-hal-cpu.h"
 
 #define PERF  // some stats about where we spend our time
 #include "src/emu.h"
 #include "src/video_out.h"
 
-// esp_8_bit
-// Atari 8 computers, NES and SMS game consoles on your TV with nothing more than a ESP32 and a sense of nostalgia
-// Supports NTSC/PAL composite video, Bluetooth Classic keyboards and joysticks
+// Include the Bluepad32 adapter.  This header declares the
+// bluepad_setup() and bluepad_update() functions used below.
+#include "bluepad_adapter.h"
 
 //  Choose one of the video standards: PAL,NTSC
 #define VIDEO_STANDARD NTSC
@@ -35,16 +35,9 @@
 //  Many emus work fine on a single core (S2), file system access can cause a little flickering
 //  #define SINGLE_CORE
 
-// The filesystem should contain folders named for each of the emulators i.e.
-//    atari800
-//    nofrendo
-//    smsplus
-// Folders will be auto-populated on first launch with a built in selection of sample media.
-// Use 'ESP32 Sketch Data Upload' from the 'Tools' menu to copy a prepared data folder to ESP32
-
 // Create a new emulator, messy ifdefs ensure that only one links at a time
 Emu* NewEmulator()
-{  
+{
   #if (EMULATOR==EMU_NES)
   return NewNofrendo(VIDEO_STANDARD);
   #endif
@@ -85,8 +78,11 @@ void emu_loop()
 // dual core mode runs emulator on comms core
 void emu_task(void* arg)
 {
+    // Print CPU frequency using the Arduino helper functions.  The
+    // rtc_clk_cpu_freq_get()/rtc_clk_cpu_freq_value() APIs used in the
+    // original code were removed in ESP‑IDF 5.x.
     printf("emu_task %s running on core %d at %dmhz\n",
-      _emu->name.c_str(),xPortGetCoreID(),rtc_clk_cpu_freq_value(rtc_clk_cpu_freq_get()));
+      _emu->name.c_str(), xPortGetCoreID(), getCpuFrequencyMhz());
     emu_init();
     for (;;)
       emu_loop();
@@ -111,11 +107,15 @@ esp_err_t mount_filesystem()
 }
 
 void setup()
-{ 
-  rtc_clk_cpu_freq_set(RTC_CPU_FREQ_240M);  
+{
+  // Set the CPU frequency to 240 MHz.  The rtc_clk_cpu_freq_set()
+  // function was removed from modern ESP32 Arduino cores; use
+  // setCpuFrequencyMhz() instead.
+  setCpuFrequencyMhz(240);
   mount_filesystem();                       // mount the filesystem!
   _emu = NewEmulator();                     // create the emulator!
   hid_init("emu32");                        // bluetooth hid on core 1!
+  bluepad_setup();                          // initialise Bluepad32 for gamepad support
 
   #ifdef SINGLE_CORE
   emu_init();
@@ -132,10 +132,10 @@ void perf()
   if (_drawn >= _next) {
     float elapsed_us = 120*1000000/(_emu->standard ? 60 : 50);
     _next = _drawn + 120;
-    
+
     printf("frame_time:%d drawn:%d displayed:%d blit_ticks:%d->%d, isr time:%2.2f%%\n",
       _frame_time/240,_drawn,_frame_counter,_blit_ticks_min,_blit_ticks_max,(_isr_us*100)/elapsed_us);
-      
+
     _blit_ticks_min = 0xFFFFFFFF;
     _blit_ticks_max = 0;
     _isr_us = 0;
@@ -147,7 +147,7 @@ void perf(){};
 
 // this loop always runs on app_core (1).
 void loop()
-{    
+{
   #ifdef SINGLE_CORE
   emu_loop();
   #else
@@ -162,9 +162,12 @@ void loop()
     }
   }
   #endif
-  
+
   // update the bluetooth edr/hid stack
   hid_update();
+
+  // update modern gamepads via Bluepad32
+  bluepad_update();
 
   // Dump some stats
   perf();

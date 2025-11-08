@@ -26,7 +26,7 @@ using namespace std;
 #include <esp_spi_flash.h>
 #include <esp_attr.h>
 #include <esp_partition.h>
-#include "rom/miniz.h"
+#include "miniz.h"
 
 // only map 1 file at a time
 spi_flash_mmap_handle_t _file_handle = 0;

@@ -14,6 +14,8 @@
  ** ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  ** SOFTWARE.
  */
+ 
+ #include "driver/gpio.h"  // provides gpio_get_level()
 
 #ifndef __ir_input__
 #define __ir_input__
@@ -37,7 +39,7 @@ void IRAM_ATTR ir_event(uint8_t ticks, uint8_t value); // t is HSYNCH ticks, v i
 
 inline void IRAM_ATTR ir_sample()
 {
-    uint8_t ir = (GPIO.in & (1 << IR_PIN)) != 0;
+    uint8_t ir = gpio_get_level(IR_PIN);  // returns 0 or 1
     if (ir != _ir_last)
     {
         ir_event(_ir_count,_ir_last);
