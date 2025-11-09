@@ -1,4 +1,5 @@
 #include <Bluepad32.h>
+#include "src/config.h"
 #include "src/emu.h"
 
 static ControllerPtr controllers[BP32_MAX_GAMEPADS];
@@ -20,7 +21,7 @@ void bluepad_setup() {
 }
 
 void process_controller(int idx, ControllerPtr ctl) {
-    // D‑pad bits: 0x01=Up, 0x02=Down, 0x04=Right, 0x08=Left:contentReference[oaicite:1]{index=1}.
+    // D-pad bits: 0x01=Up, 0x02=Down, 0x04=Right, 0x08=Left
     uint8_t dpad = ctl->dpad();
     bool up    = (dpad & 0x01);
     bool down  = (dpad & 0x02);
@@ -33,15 +34,15 @@ void process_controller(int idx, ControllerPtr ctl) {
     bool menuBtn = ctl->y();
 
     // emit key events on transitions
-    if (up    != lastUp[idx])    { gui_key(82, up    ? 1 : 0, 0); lastUp[idx]    = up;    }
-    if (down  != lastDown[idx])  { gui_key(81, down  ? 1 : 0, 0); lastDown[idx]  = down;  }
-    if (right != lastRight[idx]) { gui_key(79, right ? 1 : 0, 0); lastRight[idx] = right; }
-    if (left  != lastLeft[idx])  { gui_key(80, left  ? 1 : 0, 0); lastLeft[idx]  = left;  }
-    if (a     != lastA[idx])     { gui_key(gui_is_visible() ? 40 : 225, a ? 1 : 0, 0); lastA[idx] = a; }
-    if (b     != lastB[idx])     { gui_key(gui_is_visible() ? 58 : 226, b ? 1 : 0, 0); lastB[idx] = b; }
-    if (start != lastStart[idx]) { gui_key(40,  start? 1 : 0, 0); lastStart[idx] = start; }
-    if (select!= lastSelect[idx]){ gui_key(43,  select?1 : 0, 0); lastSelect[idx]= select;}
-    if (menuBtn!= lastMenu[idx]) { gui_key(58,  menuBtn?1:0, 0);  lastMenu[idx]  = menuBtn;}
+    if (up    != lastUp[idx])    { gui_key(KEYCODE_UP,    up    ? 1 : 0, 0); lastUp[idx]    = up;    }
+    if (down  != lastDown[idx])  { gui_key(KEYCODE_DOWN,  down  ? 1 : 0, 0); lastDown[idx]  = down;  }
+    if (right != lastRight[idx]) { gui_key(KEYCODE_RIGHT, right ? 1 : 0, 0); lastRight[idx] = right; }
+    if (left  != lastLeft[idx])  { gui_key(KEYCODE_LEFT,  left  ? 1 : 0, 0); lastLeft[idx]  = left;  }
+    if (a     != lastA[idx])     { gui_key(gui_is_visible() ? KEYCODE_START : KEYCODE_A_EMU, a ? 1 : 0, 0); lastA[idx] = a; }
+    if (b     != lastB[idx])     { gui_key(gui_is_visible() ? KEYCODE_MENU_TOGGLE : KEYCODE_B_EMU, b ? 1 : 0, 0); lastB[idx] = b; }
+    if (start != lastStart[idx]) { gui_key(KEYCODE_START,  start? 1 : 0, 0); lastStart[idx] = start; }
+    if (select!= lastSelect[idx]){ gui_key(KEYCODE_SELECT, select?1 : 0, 0); lastSelect[idx]= select;}
+    if (menuBtn!= lastMenu[idx]) { gui_key(KEYCODE_MENU_TOGGLE, menuBtn?1:0, 0);  lastMenu[idx]  = menuBtn;}
 }
 
 void bluepad_update() {
@@ -58,3 +59,4 @@ void bluepad_update() {
         }
     }
 }
+

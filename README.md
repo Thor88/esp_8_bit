@@ -1,5 +1,5 @@
-# **ESP_8_BIT:** Atari 8 bit computers, NES and SMS game consoles on your TV with nothing more than a ESP32 and a sense of nostalgia
-## Supports NTSC/PAL color composite video output, Bluetooth Classic or IR keyboards and joysticks; just the thing when we could all use a little distraction
+# ESP_8_BIT: NES on your TV with an ESP32
+## Supports NTSC/PAL color composite video output and Bluetooth gamepads via Bluepad32
 
 ![ESP_8_BIT](img/esp8bit.jpg)
 
@@ -25,57 +25,14 @@
 ```
 Audio is on pin 18 by default but can be remapped.
 
-Before you compile the sketch you have 2 choices:
+Before you compile the sketch set the video standard:
 ```
-//  Choose one of the video standards: PAL, NTSC
+//  Choose one of the video standards: PAL or NTSC
 #define VIDEO_STANDARD NTSC
-
-//  Choose one of the following emulators: EMU_NES,EMU_SMS, EMU_ATARI
-#define EMULATOR EMU_ATARI
 ```
 Build and run the sketch and connect to an old-timey composite input. The first time the sketch runs in will auto-populate the file system with a selection of fine old and new homebrew games and demos. This process only happens once and takes about ~20 seconds so don't be frightened by the black screen.
 
 # The Emulated
-
-## Atari 400/800, XL, XEGS, 5200
-Oh how I adore thee Atari 8 bit. 40 years on your cheery blue default background color and enigmatically wiggly built-in font still delights me. Your bizarre industrial design and [giant floppy drives](https://hackaday.com/2015/11/03/minituarizing-the-atari-disk-drive/) are the stuff of legend. Nice to see you back in this new incarnation.
-
-Atari support is built from the venerable Atari800 emulator. Some violence was done to move structures and tables into read-only flash. It does not support machines with 128k RAM.
-
-Enter/Exit GUI with F1. In GUI, '1' or '2' keys insert a disk (**.atr** file) into drives 1 or 2. A '0' key ejects the disk. Shift + Enter will insert Basic along with the selected disk. A 'filename.cfg' file can be used to override default settings. i.e.
-miner2049er.bin.cfg (for miner2049er.bin) would look like
-```
--5200 -ntsc -cart-type 4 -cart
-```
-File system is mounted as the "H1" device. See https://atari800.github.io/ for more details.
-
-| Keyboard | Atari |
-| ---------- | ----------- |
-| Arrow Keys | Joystick 1 |
-| Left Shift | Fire Button |
-| F1 | Open/Close GUI |
-| F2 | Option |
-| F3 | Select |
-| F4 | Start |
-| F5 | Warm Reset |
-| Shift+F5 | Cold Reset |
-| F6 | Help (XL/XE) |
-| F7 | Break |
-
-| Keyboard | Atari 5200 |
-| ---------- | ----------- |
-| S Key | Start |
-| P Key | Pause |
-| R Key | Reset |
-
-| WiiMote (sideways) | Atari |
-| ---------- | ----------- |
-| D-Pad | Joysticks |
-| A,B,1,2 | Fire Buttons |
-| Home | GUI |
-| Minus | Select |
-| Plus | Start |
-| Plus & Minus Together | Warm Reset |
 
 ## Nintendo Entertainment System
 Based on [nofrendo](http://www.baisoku.org/).
@@ -88,35 +45,15 @@ Based on [nofrendo](http://www.baisoku.org/).
 | Return | Start |
 | Tab | Select |
 
-| WiiMote (sideways) | NES |
-| ---------- | ----------- |
-| Plus | Start |
-| Minus | Select |
-| A,1 | Button A |
-| B,2 | Button B |
-| Plus & Minus Together | Reset |
+## Controllers (Bluepad32)
+Supported Bluetooth gamepads are handled via Bluepad32.
 
-## Sega Master System, Game Gear
-Based on [smsplus](https://www.bannister.org/software/sms.htm). Plays **.sms** (Sega Master System) and **.gg** (Game Gear) ROMs. Game Gear titles look a little funny in the middle of the screen, but Shinobi is still a masterpiece.
-
-This is the same emulator with which the brilliant and prolific [SpriteTM](https://esp32.com/viewtopic.php?f=2&t=53) first demostrated the power of the ESP31. [Jeroen](http://spritesmods.com/) is the person most responsible for making the ESP32 ecosystem a pleasure to work with.
-
-| Keyboard | SMS |
-| ---------- | ----------- |
-| Arrow Keys | D-Pad |
-| Left Shift | Button 1 |
-| Option | Button 2 |
-| Return | Start |
-| Tab | Select |
-
-| WiiMote (sideways) | SMS |
-| ---------- | ----------- |
-| A,1 | Button 1 |
-| B,2 | Button 2 |
-| Home | GUI |
-| Minus | Pause |
-| Plus | Start |
-| Plus & Minus Together | Reset |
+- D-pad: navigate menu / move
+- A: select in menu; NES A in-game
+- B: back (closes menu) in menu; NES B in-game
+- Start: Start
+- Select: Select
+- Y: toggle menu
 
 # How it works
 
@@ -181,13 +118,13 @@ You will want to add a simple rc filter to the output pin of either PWM or PDM t
 
 ## Bringing it Together
 
-The audio/video system uses a double buffered I2S DMA to send video data line by line to the DAC. The interrupt keeps time at the line rate (15720hz for NTSC, 15600hz for PAL). A single audio sample is fed to the LED PWM and a single line of video is converted from index color to phase/amplitude at each interrupt. The IR input pin is scanned and the various IR state machines advanced on changes.
+The audio/video system uses a double buffered I2S DMA to send video data line by line to the DAC. The interrupt keeps time at the line rate (15720hz for NTSC, 15600hz for PAL). A single audio sample is fed to the LED PWM and a single line of video is converted from index color to phase/amplitude at each interrupt.
 
 This a/v pump is fed by the emulator running asynchronously producing frames of video and audio. The emulator may be running on a different core and may occasionally take longer than a frame time to produce a frame (SPI paging / FS etc). The interrupt driven pump won't care, it just keeps emitting the last frame.
 
-## Bluetooth Classic HID
+## Controllers
 
-As of this writing the ESP32 IDF / Arduino does not support Bluetooth Classic input devices out of the box. **ESP_8_BIT** includes a minimal HCI/L2CAP/HID stack implemented on top of the VHCI api. This `hid_server` implementation is designed to support EDR Keyboards, WiiMotes and their peripherals. The implementation is bare bones but supports paring/reconnections and is easily separable to be used in other projects.
+Bluepad32 handles pairing and input for modern Bluetooth gamepads.
 
 ## Big Cartridges
 
@@ -199,19 +136,13 @@ Short answer is you don't. When a large cart is selected it gets copied into `Cr
 
 
 # Keyboards & Controllers
-**ESP_8_BIT** supports Bluetooth Classic/EDR keyboards and WiiMotes along with an variety of IR keyboards and joysticks.
-
-**On boot the software searches for new Bluetooth devices for 5 seconds**; if the device is in pairing mode the software should find it and display its name at the bottom of the screen. Some keyboards will require you to enter a "0000" to establish the connection the first time. WiiMotes should automatically pair and reconnect. WiiMote Classic controllers are also supported.
-
-![Input Devices](img/inputdevices.jpg)
-
-A number of IR input devices are supported if to add a optional IR receiver (TSOP38238, TSOP4838 or equivalent) to pin 0. The IR Wireless Controllers from Atari Flashback 4 work well and have that classic Atari joystick feel. Retron IR controllers are supported as are WebTV keyboards that come in various guises: WebTV, MsnTV, Displayer, UltimateTV etc. They all should work just fine. A few places have the nice Philips variant new for $11.95 w/ free shipping (search for 'SWK-8630'). If you made a [ZorkDuino](https://hackaday.com/2014/04/30/the-zorkduino/) you will have one of these.
+This build targets gamepads via Bluepad32 only.
 
 # Time to Play
 
 If you would like to upload your own media copy them into the appropriate subfolder named for each of the emulators in the data folder. Note that the SPIFFS filesystem is fussy about filenames, keep them short, no spaces allowed. Use '[ESP32 Sketch Data Upload](https://randomnerdtutorials.com/install-esp32-filesystem-uploader-arduino-ide/)' from the 'Tools' menu to copy a prepared data folder to ESP32.
 
-Play through the included demos. Load up your own. Write some Atari Basic masterpiece. Type in a game from an old Antic magazine. Finally get around to finishing Zork.
+Play through the included demos. Load up your own. Finally get around to finishing that NES classic.
 
 Enjoy,
 

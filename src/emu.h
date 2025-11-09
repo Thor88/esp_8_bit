@@ -28,10 +28,8 @@
 #include <vector>
 #include <map>
 
-#define EMU_ATARI 1
 #define EMU_NES 2
 #define EMU_NES6 4
-#define EMU_SMS 3
 
 enum {
   PAL = 0,
@@ -66,25 +64,7 @@ public:
     #define KEY_MOD_ALT    (KEY_MOD_LALT|KEY_MOD_RALT)
     #define KEY_MOD_GUI    (KEY_MOD_LGUI|KEY_MOD_RGUI)
 
-    // generic joystick, ir for Atari Flashback and RETCON
-    #define GENERIC_OTHER   0x8000
-
-    #define GENERIC_FIRE_X  0x4000  // RETCON
-    #define GENERIC_FIRE_Y  0x2000
-    #define GENERIC_FIRE_Z  0x1000
-    #define GENERIC_FIRE_A  0x0800
-    #define GENERIC_FIRE_B  0x0400
-    #define GENERIC_FIRE_C  0x0200
-
-    #define GENERIC_RESET   0x0100     // ATARI FLASHBACK
-    #define GENERIC_START   0x0080
-    #define GENERIC_SELECT  0x0040
-    #define GENERIC_FIRE    0x0020
-    #define GENERIC_RIGHT   0x0010
-    #define GENERIC_LEFT    0x0008
-    #define GENERIC_DOWN    0x0004
-    #define GENERIC_UP      0x0002
-    #define GENERIC_MENU    0x0001
+    // legacy generic joystick/IR mappings removed
 
     std::string name;
     const char** _ext;
@@ -117,7 +97,7 @@ public:
     static int head(const std::string& path, uint8_t* data, int len);
     virtual int info(const std::string& file, std::vector<std::string>& strs) { return -1; };
 
-    virtual void hid(const uint8_t* d, int len) {};
+    // legacy HID input removed; Bluepad32 adapter sends gui_key directly
     virtual void key(int keycode, int pressed, int mod) {};
 
     virtual int update() = 0;
@@ -131,7 +111,6 @@ public:
 };
 
 void gui_start(Emu* emu, const char* path);
-void gui_hid(const uint8_t* hid, int len);  // Parse HID event
 void gui_update();
 void gui_key(int keycode, int pressed, int mod);
 bool gui_is_visible();
@@ -147,11 +126,6 @@ extern "C" FILE* mkfile(const char* path);
 extern "C" int unpack(const char* dst_path, const uint8_t* d, int len);
 
 void audio_write_16(const int16_t* s, int len, int channels);
-int get_hid_ir(uint8_t* dst);
-uint32_t generic_map(uint32_t m, const uint32_t* target);
-
-Emu* NewAtari800(int ntsc = 1);
 Emu* NewNofrendo(int ntsc = 1);
-Emu* NewSMSPlus(int ntsc = 1);
 
 #endif /* emu_hpp */

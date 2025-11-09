@@ -247,16 +247,6 @@ FILE* mkfile(const char* path)
 
 #endif
 
-// map one bit array to another
-uint32_t generic_map(uint32_t bits, const uint32_t* m)
-{
-    uint32_t b = 0;
-    for (int i = 0; i < 16; i++) {
-        if ((0x8000 >> i) & bits)
-            b |= m[i];
-    }
-    return b;
-}
 
 // unpack file and write to FS, use rom miniz on esp32
 // uses quite a lot of memory, call before initializing screen on atari

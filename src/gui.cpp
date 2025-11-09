@@ -351,23 +351,10 @@ public:
         _width = width;
         _height = height;
         _flavor = flavor;
-        switch (_flavor) {
-            case EMU_NES:
-                OVERLAY_WIDTH = 28;
-                OVERLAY_HEIGHT = 20;
-                set_colors(0x39,0x09);  // nes
-                break;
-            case EMU_ATARI:
-                OVERLAY_WIDTH = 34;
-                OVERLAY_HEIGHT = 22;
-                set_colors(0xCE,0xC2);  // atari
-                break;
-            case EMU_SMS:
-                OVERLAY_WIDTH = 28;
-                OVERLAY_HEIGHT = 20;
-                set_colors(7<<2,1<<3);  // sms - 332 rgb
-                break;
-        }
+        // Only NES overlay style is supported
+        OVERLAY_WIDTH = 28;
+        OVERLAY_HEIGHT = 20;
+        set_colors(0x39,0x09);
 
         _buf = new uint8_t[OVERLAY_WIDTH*OVERLAY_HEIGHT];
         memset(_buf,0,OVERLAY_WIDTH*OVERLAY_HEIGHT);
@@ -436,22 +423,10 @@ public:
     {
         uint8_t p = getp(dst);
         uint8_t r,g,b;
-        switch (_flavor) {
-            case EMU_NES:
-                b = (((p >> 4) & 3) * c) >> 7;
-                if (b > 3) b = 3;
-                p = (b << 4) | (p & 0xCF);  // nes luma adjust
-                break;
-            case EMU_ATARI:
-                p = (((p & 0xF) * c) >> 7) | (p & 0xF0);  // atari luma adjust
-                break;
-            case EMU_SMS:
-                r = ((p & 0xE0) * c >> 7) & 0xE0;  // sms
-                g = ((p & 0x1C) * c >> 7) & 0x1C;
-                b = ((p & 0x03) * c >> 7) & 0x03;
-                p = r | g | b;
-                break;
-        }
+        // NES luma adjust only
+        b = (((p >> 4) & 3) * c) >> 7;
+        if (b > 3) b = 3;
+        p = (b << 4) | (p & 0xCF);
         setp(dst,p);
     }
 
@@ -537,7 +512,6 @@ public:
     string _path;
     vector<string> _files;
     vector<string> _info;
-    int _disks[2];
     int _tab_hilited[3];
     int _tab_scroll[3];
     int _active;
@@ -555,7 +529,6 @@ public:
 
     GUI() : _active(0),_hilited(0),_tab(0),_visible(0),_dirty(true),_click(0),_emu(0)
     {
-        _disks[0] = _disks[1] = -1;
         _tab_hilited[0] = _tab_hilited[1] = _tab_hilited[2] = 0;
         _tab_scroll[0] = _tab_scroll[1] = _tab_scroll[2] = 0;
     }
@@ -650,15 +623,7 @@ public:
         return 0;
     }
 
-    void eject_disk(int findex)
-    {
-        for (int i = 0; i < 2; i++) {
-            if (_disks[i] == findex) {
-                set_pref(disk_name(i),"");
-                _disks[i] = -1;
-            }
-        }
-    }
+    // Disk management removed (Atari-only)
 
     void insert(const string& path, int flags)
     {
@@ -666,16 +631,7 @@ public:
         _emu->insert(_path + "/" + path,flags);
     }
 
-    void insert_disk(int dindex, int findex, int reboot = 0)
-    {
-        eject_disk(findex);
-        const string& file = _files[findex];
-        _disks[dindex] = findex;
-        set_pref(disk_name(dindex),file);
-        if (dindex == 0)
-            set_pref("recent",file);
-        _emu->insert(_path + "/" + file,reboot,dindex);
-    }
+    // insert_disk removed (Atari-only)
 
     void enter(int mods)
     {
@@ -685,28 +641,13 @@ public:
         int flags = 1;
         if (mods & 2)
             flags |= 2; // shift key
-        if (is_disk(_hilited))
-            insert_disk(0,_hilited,flags);
-        else {
-            insert(_files[_hilited],flags);
-            if (_disks[0] != -1)
-                insert_disk(0,_disks[0]);   // reinsert disk 1 after restart
-        }
-        if (_disks[1] != -1)
-            insert_disk(1,_disks[1]);       // reinsert disk 2 after restart
+        insert(_files[_hilited],flags);
         _visible = false;
     }
 
-    bool is_disk(int i)
-    {
-        string ext = get_ext(_files[i]);
-        return (ext == "atr" || ext == "atx");
-    }
+    // is_disk removed
 
-    string disk_name(int index)
-    {
-        return string("disk") + (char)('0' + index);
-    }
+    // disk_name removed
 
     int find_file(const string& file)
     {
@@ -717,32 +658,19 @@ public:
         return -1;
     }
 
-    int find_disk(int index)
-    {
-        string n = get_pref(disk_name(index));
-        int i = find_file(n);
-        if (i >= 0)
-            insert_disk(index,i);
-        return i;
-    }
+    // find_disk removed
 
-    void disk_key(int dindex)
-    {
-        if (_emu->flavor != EMU_ATARI)
-            return;
-        if (dindex == 9 && is_disk(_hilited)) { // '0' key
-            eject_disk(_hilited);
-            return;
-        }
-        if (!is_disk(_hilited)) //|| (_disks[dindex] == _hilited))
-            return;
-        insert_disk(dindex,_hilited);
-    }
+    // disk_key removed
 
     // raw keycode
     bool key(int keycode, int pressed, int mods)
     {
+        #ifndef GUI_DEBUG
+        #define GUI_DEBUG 0
+        #endif
+        #if GUI_DEBUG
         printf("key:%02X %02X %02X\n",keycode,pressed,mods);
+        #endif
         if (pressed && _visible)
             _click = 1;
 
@@ -758,11 +686,6 @@ public:
 
         if (pressed) {
             switch (keycode) {
-                case 30:        // 1 key
-                case 31:        // 2 key
-                case 39:        // 0 key
-                    disk_key(keycode-30);
-                    break;
                 case 40:
                     enter(mods);    // return
                     break;
@@ -853,13 +776,7 @@ public:
         _overlay->plot_char(icon+128,0,y);
     }
 
-    void draw_disk(int index)
-    {
-        for (int i = 0; i < 2; i++) {
-            if (index == _disks[i])
-                draw_icon(index,'1' + i);
-        }
-    }
+    // draw_disk removed
 
     void draw_files()
     {
@@ -870,7 +787,6 @@ public:
             if (c.length() > w)
                 c.resize(w);
             draw_item(i,c.c_str(),i == _hilited);
-            draw_disk(i);
         }
         clear(i);
     }
@@ -924,8 +840,7 @@ public:
 
         int recent = find_file(get_pref("recent"));
 
-        for (int i = 0; i < 2; i++)
-            _disks[i] = find_disk(i);
+        // disk reinsertion removed
 
         // just insert the first one
         if (_files.empty()) {
@@ -1002,14 +917,7 @@ void gui_update()
     _gui.update_audio();
     _gui.update_video();
 
-/*     uint8_t buf[64];
-    int n = hid_get(buf,sizeof(buf));    // called from emulation loop
-    if (n > 0)
-        gui_hid(buf,n);
-    
-    n = get_hid_ir(buf);
-    if (n > 0)
-        gui_hid(buf,n); */
+    // HID/IR input removed in favor of Bluepad32
 }
 
 void gui_key(int keycode, int pressed, int mods)
@@ -1026,87 +934,4 @@ bool gui_is_visible()
 
 //==================================================================
 //==================================================================
-// hid keyboard events
-// 01 mods XX k k k k k k
-// 03 XXXXXXXXX // weird apple/android bitmask mode?
 
-// http://www.usb.org/developers/devclass_docs/Hut1_12v2.pdf
-// Same as SDL scancodes
-
-static int _last_key = 0;
-static void keyboard(const uint8_t* d, int len)
-{
-    int mods = d[1];          // can we use hid mods instead of SDL? TODO
-    int key_code = d[3];      // only care about first key
-    if (key_code != _last_key) {
-        if (key_code) {
-            if (_last_key)
-                gui_key(_last_key,0,mods);
-            gui_key(key_code,1,mods);
-            _last_key = key_code;
-        } else {
-            gui_key(_last_key,0,mods);
-            _last_key = 0;
-        }
-    }
-}
-
-// Handle WII/IR controllers for operating GUI
-static int _last_pad = 0;
-static void pad_key(int mask, int state, int key)
-{
-    if ((_last_pad & mask) == (state & mask))
-        return;
-    gui_key(key,state & mask,0);
-}
-
-static void wii()
-{
-    // int pad = wii_states[0].common();
-    // pad_key(wii_right,pad,82);  // up
-    // pad_key(wii_left,pad,81);   // down
-    // pad_key(wii_down,pad,79);   // right
-    // pad_key(wii_up,pad,80);     // left
-    // pad_key(wii_home,pad,58);   // home/gui
-    // pad_key(wii_a | wii_one | wii_two,pad,40); // enter (A)
-    // _last_pad = pad;
-}
-
-static void ir(const uint8_t* j, int len)
-{
-    // int pad = j[0] + (j[1] << 8);
-    // pad_key(GENERIC_UP,pad,82);  // up
-    // pad_key(GENERIC_DOWN,pad,81);   // down
-    // pad_key(GENERIC_RIGHT,pad,79);   // right
-    // pad_key(GENERIC_LEFT,pad,80);     // left
-    // pad_key(GENERIC_RESET | GENERIC_FIRE_Z,pad,58);   // home/gui
-    // pad_key(GENERIC_FIRE | GENERIC_FIRE_C | GENERIC_FIRE_B | GENERIC_FIRE_A,pad,40); // enter (A)
-    // _last_pad = pad;
-}
-
-void gui_hid(const uint8_t* hid, int len)  // Parse HID event
-{
-    if (hid[0] != 0xA1)
-        return;
-    /*
-    for (int i = 0; i < len; i++)
-        printf("%02X",hid[i]);
-    printf("\n");
-    */
-    switch (hid[1]) {
-        case 0x01: keyboard(hid+1,len-1);   break;   // parse keyboard and maintain 1 key state
-        //ase 0x32: wii();                   break;   // parse wii stuff: generic?
-        //case 0x42: ir(hid+2,len);           break;   // ir joy
-    }
-    _gui._emu->hid(hid+1,len-1);    // send raw events
-}
-
-void gui_msg(const char* msg)         // temporarily display a msg
-{
-    _gui.msg(msg);
-}
-
-void sys_msg(const char* msg)          // temporarily display a msg
-{
-    gui_msg(msg);
-}

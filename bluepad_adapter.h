@@ -10,6 +10,6 @@
 // Initialise the Bluepad32 subsystem.  Should be called once from setup().
 void bluepad_setup();
 
-// Poll connected gamepads and generate GUI key events.  Call this from the
-// main loop alongside hid_update().
+// Poll connected gamepads and generate GUI key events.
+// Call this from the main loop.
 void bluepad_update();

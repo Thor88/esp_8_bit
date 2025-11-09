@@ -175,13 +175,6 @@ const char* _nes_help[] = {
     "  Option     - Button B",
     "  Return     - Start",
     "  Tab        - Select",
-    "",
-    "Wiimote (held sideways):",
-    "  +          - Start",
-    "  -          - Select",
-    "  + & -      - Reset",
-    "  A,1        - Button A",
-    "  B,2        - Button B",
     0
 };
 
@@ -295,96 +288,7 @@ public:
     };
 
     // Rotated 90%
-    const uint32_t _common_nes[16] = {
-        0,  // msb
-        0,
-        0,
-        event_joypad1_start_,       // PLUS
-        event_joypad1_left_,        // UP
-        event_joypad1_right_,       // DOWN
-        event_joypad1_up_,          // RIGHT
-        event_joypad1_down_,        // LEFT
-
-        0, // HOME
-        0,
-        0,
-        event_joypad1_select_,  // MINUS
-        event_joypad1_a_,      // A
-        event_joypad1_b_,      // B
-        event_joypad1_b_,      // ONE
-        event_joypad1_a_,      // TWO
-    };
-
-    const uint32_t _classic_nes[16] = {
-        event_joypad1_right_,    // RIGHT
-        event_joypad1_down_,     // DOWN
-        0,                       // LEFT_TOP
-        event_joypad1_select_,    // MINUS
-        0,                        // HOME
-        event_joypad1_start_,     // PLUS
-        0,                    // RIGHT_TOP
-        0,
-
-        0,                  // LOWER_LEFT
-        event_joypad1_b_,   // B
-        0,                  // Y
-        event_joypad1_a_,   // A
-        0,                  // X
-        0,                  // LOWER_RIGHT
-        event_joypad1_left_, // LEFT
-        event_joypad1_up_   // UP
-    };
-
-    const uint32_t _generic_nes[16] = {
-        0,                  // GENERIC_OTHER   0x8000
-        0,                  // GENERIC_FIRE_X  0x4000  // RETCON
-        0,                  // GENERIC_FIRE_Y  0x2000
-        0,                  // GENERIC_FIRE_Z  0x1000
-
-        event_joypad1_a_,      //GENERIC_FIRE_A  0x0800
-        event_joypad1_b_,      //GENERIC_FIRE_B  0x0400
-        0,                      //GENERIC_FIRE_C  0x0200
-        0,                      //GENERIC_RESET   0x0100     // ATARI FLASHBACK
-
-        event_joypad1_start_,   //GENERIC_START   0x0080
-        event_joypad1_select_,  //GENERIC_SELECT  0x0040
-        event_joypad1_a_,      //GENERIC_FIRE    0x0020
-        event_joypad1_right_,  //GENERIC_RIGHT   0x0010
-
-        event_joypad1_left_,   //GENERIC_LEFT    0x0008
-        event_joypad1_down_,   //GENERIC_DOWN    0x0004
-        event_joypad1_up_,      //GENERIC_UP      0x0002
-        0,                      //GENERIC_MENU    0x0001
-    };
-
-    // raw HID data. handle WII/IR mappings
-    virtual void hid(const uint8_t* d, int len)
-    {
-        // if (d[0] != 0x32 && d[0] != 0x42)
-        //     return;
-        // bool ir = *d++ == 0x42;
-
-        // for (int i = 0; i < 2; i++) {
-        //     uint32_t p;
-        //     if (ir) {
-        //         int m = d[0] + (d[1] << 8);
-        //         p = generic_map(m,_generic_nes);
-        //         d += 2;
-        //     } else
-        //         p = wii_map(i,_common_nes,_classic_nes);
-
-        //     // reset on select + start held at the same time
-        //     if ((p & event_joypad1_select_) && (p & event_joypad1_start_))
-        //         pad(1,event_soft_reset);
-
-        //     const int* m = i ? _nes_2 : _nes_1;
-        //     for (int e = 0; m[e]; e++)
-        //     {
-        //         pad((p & 1),m[e]);
-        //         p >>= 1;
-        //     }
-        // }
-    }
+    // Legacy Wiimote/IR help and HID mapping removed
 
     /*
      Return - Joypad 1 Start

@@ -15,8 +15,12 @@
 ** SOFTWARE.
 */
 
+#include "config.h"
+
 #define VIDEO_PIN   26
+#ifndef AUDIO_PIN
 #define AUDIO_PIN   18  // can be any pin
+#endif
 
 int _pal_ = 0;
 
@@ -168,9 +172,16 @@ void video_init_hw(int line_width, int samples_per_cc)
     //                   |
     //                   v gnd
 
-	ledcSetup(0, 2000000, 7);
+	// LEDC constraints: f = clk / (div * 2^resolution).
+	// Use values from config.h or fall back to defaults.
+	ledcSetup(0, AUDIO_PWM_FREQ, AUDIO_PWM_RES_BITS);
 	ledcAttachPin(AUDIO_PIN, 0);
-	ledcWrite(0, 0);
+	ledcWrite(0, 32); // center duty for 6-bit (mid-level)
+
+	// Pre-enable LEDC channel output and clock so ISR only updates duty & latch
+	auto& ch = LEDC.channel_group[0].channel[0];
+	ch.conf0.sig_out_en = 1;
+	ch.conf0.clk_en = 1;
 }
 
 // send an audio sample every scanline (15720hz for ntsc, 15600hz for PAL)
@@ -178,9 +189,7 @@ inline void IRAM_ATTR audio_sample(uint8_t s)
 {
     auto& reg = LEDC.channel_group[0].channel[0];
     reg.duty.duty = s << 4; // 25 bit (21.4)
-    reg.conf0.sig_out_en = 1; // This is the output enable control bit for channel
-    reg.conf1.duty_start = 1; // When duty_num duty_cycle and duty_scale has been configured. these register won't take effect until set duty_start. this bit is automatically cleared by hardware
-    reg.conf0.clk_en = 1;
+    reg.conf1.duty_start = 1; // latch new duty
 }
 
 //  Appendix
@@ -251,12 +260,7 @@ uint32_t xthal_get_ccount() {
 
 void audio_sample(uint8_t s);
 
-//void ir_sample();
-
-int get_hid_ir(uint8_t* buf)
-{
-    return 0;
-}
+// legacy HID/IR removed in simulator
 
 #endif
 
@@ -395,91 +399,11 @@ void IRAM_ATTR blit_pal(uint8_t* src, uint16_t* dst)
     uint8_t c0,c1,c2,c3,c4;
     uint8_t y1,y2,y3;
 
-    switch (_machine) {
-        case EMU_ATARI:
-            // pal is 5/4 wider than ntsc to account for pal 288 color clocks per line vs 228 in ntsc
-            // so do an ugly stretch on pixels (actually luma) to accomodate -> 384 pixels are now 240 pal color clocks wide
-            left = 24;
-            right = 384-24; // only show center 336 pixels
-            dst += 40;
-            for (int i = left; i < right; i += 4) {
-                c = *((uint32_t*)(src+i));
-
-                // make 5 colors out of 4 by interpolating y: 0000 0111 1122 2223 3333
-                c0 = c;
-                c1 = c >> 8;
-                c3 = c >> 16;
-                c4 = c >> 24;
-                y1 = (((c1 & 0xF) << 1) + ((c0 + c1) & 0x1F) + 2) >> 2;    // (c0 & 0xF)*0.25 + (c1 & 0xF)*0.75;
-                y2 = ((c1 + c3 + 1) >> 1) & 0xF;                           // (c1 & 0xF)*0.50 + (c2 & 0xF)*0.50;
-                y3 = (((c3 & 0xF) << 1) + ((c3 + c4) & 0x1F) + 2) >> 2;    // (c2 & 0xF)*0.75 + (c3 & 0xF)*0.25;
-                c1 = (c1 & 0xF0) + y1;
-                c2 = (c1 & 0xF0) + y2;
-                c3 = (c3 & 0xF0) + y3;
-
-                color = p[c0];
-                dst[0^1] = P0;
-                dst[1^1] = P1;
-                color = p[c1];
-                dst[2^1] = P2;
-                dst[3^1] = P3;
-                color = p[c2];
-                dst[4^1] = P0;
-                dst[5^1] = P1;
-                color = p[c3];
-                dst[6^1] = P2;
-                dst[7^1] = P3;
-                color = p[c4];
-                dst[8^1] = P0;
-                dst[9^1] = P1;
-
-                i += 4;
-                c = *((uint32_t*)(src+i));
-                
-                // make 5 colors out of 4 by interpolating y: 0000 0111 1122 2223 3333
-                c0 = c;
-                c1 = c >> 8;
-                c3 = c >> 16;
-                c4 = c >> 24;
-                y1 = (((c1 & 0xF) << 1) + ((c0 + c1) & 0x1F) + 2) >> 2;    // (c0 & 0xF)*0.25 + (c1 & 0xF)*0.75;
-                y2 = ((c1 + c3 + 1) >> 1) & 0xF;                           // (c1 & 0xF)*0.50 + (c2 & 0xF)*0.50;
-                y3 = (((c3 & 0xF) << 1) + ((c3 + c4) & 0x1F) + 2) >> 2;    // (c2 & 0xF)*0.75 + (c3 & 0xF)*0.25;
-                c1 = (c1 & 0xF0) + y1;
-                c2 = (c1 & 0xF0) + y2;
-                c3 = (c3 & 0xF0) + y3;
-
-                color = p[c0];
-                dst[10^1] = P2;
-                dst[11^1] = P3;
-                color = p[c1];
-                dst[12^1] = P0;
-                dst[13^1] = P1;
-                color = p[c2];
-                dst[14^1] = P2;
-                dst[15^1] = P3;
-                color = p[c3];
-                dst[16^1] = P0;
-                dst[17^1] = P1;
-                color = p[c4];
-                dst[18^1] = P2;
-                dst[19^1] = P3;
-                dst += 20;
-            }
-            return;
-
-        case EMU_NES:
-            // 192 of 288 color clocks wide: roughly correct aspect ratio
-            mask = 0x3F;
-            if (!even)
-              p = _palette + 64;
-            dst += 88;
-            break;
-          
-        case EMU_SMS:
-            // 192 of 288 color clocks wide: roughly correct aspect ratio
-            dst += 88;
-            break;
-    }
+    // NES only: 192 of 288 color clocks wide
+    mask = 0x3F;
+    if (!even)
+      p = _palette + 64;
+    dst += 88;
 
     // 4 pixels over 3 color clocks, 12 samples
     // do the blitting
@@ -556,79 +480,27 @@ void IRAM_ATTR blit(uint8_t* src, uint16_t* dst)
         return;
     }
 
-    switch (_machine) {
-        case EMU_ATARI:
-            // 2 pixels per color clock, 4 samples per cc, used by atari
-            // AA AA
-            // 192 color clocks wide
-            // only show 336 pixels
-            src += 24;
-            d += 16;
-            for (i = 0; i < (384-48); i += 4) {
-                uint32_t c = *((uint32_t*)src); // screen may be in 32 bit mem
-                d[0] = p[(uint8_t)c];
-                d[1] = p[(uint8_t)(c>>8)] << 8;
-                d[2] = p[(uint8_t)(c>>16)];
-                d[3] = p[(uint8_t)(c>>24)] << 8;
-                d += 4;
-                src += 4;
-            }
-            break;
-
-            /*
-        case EMU_NES:
-            // 3 pixels to 2 color clocks, 3 samples per cc, used by nes
-            // could be faster with better tables: 2953 cycles ish
-            // about 18% of the core at 240Mhz
-            // 170 color clocks wide: not all that attractive
-            // AA AB BB
-            for (i = 0; i < 255; i += 3) {
-                color = p[src[i+0] & 0x3F];
-                dst[0^1] = P0;
-                dst[1^1] = P1;
-                color = p[src[i+1] & 0x3F];
-                dst[2^1] = P2;
-                dst[3^1] = P0;
-                color = p[src[i+2] & 0x3F];
-                dst[4^1] = P1;
-                dst[5^1] = P2;
-                dst += 6;
-            }
-            // last pixel
-            color = p[src[i+0]];
-            dst[0^1] = P0;
-            dst[1^1] = P1;
-            break;
-            */
-
-        case EMU_NES:
-            mask = 0x3F;
-        case EMU_SMS:
-            // AAA ABB BBC CCC
-            // 4 pixels, 3 color clocks, 4 samples per cc
-            // each pixel gets 3 samples, 192 color clocks wide
-            for (i = 0; i < 256; i += 4) {
-                c = *((uint32_t*)(src+i));
-                color = p[c & mask];
-                dst[0^1] = P0;
-                dst[1^1] = P1;
-                dst[2^1] = P2;
-                color = p[(c >> 8) & mask];
-                dst[3^1] = P3;
-                dst[4^1] = P0;
-                dst[5^1] = P1;
-                color = p[(c >> 16) & mask];
-                dst[6^1] = P2;
-                dst[7^1] = P3;
-                dst[8^1] = P0;
-                color = p[(c >> 24) & mask];
-                dst[9^1] = P1;
-                dst[10^1] = P2;
-                dst[11^1] = P3;
-                dst += 12;
-            }
-            break;
-
+    // NES: AAA ABB BBC CCC (mask=0x3F)
+    mask = 0x3F;
+    for (i = 0; i < 256; i += 4) {
+        c = *((uint32_t*)(src+i));
+        color = p[c & mask];
+        dst[0^1] = P0;
+        dst[1^1] = P1;
+        dst[2^1] = P2;
+        color = p[(c >> 8) & mask];
+        dst[3^1] = P3;
+        dst[4^1] = P0;
+        dst[5^1] = P1;
+        color = p[(c >> 16) & mask];
+        dst[6^1] = P2;
+        dst[7^1] = P3;
+        dst[8^1] = P0;
+        color = p[(c >> 24) & mask];
+        dst[9^1] = P1;
+        dst[10^1] = P2;
+        dst[11^1] = P3;
+        dst += 12;
     }
     END_TIMING();
 }
@@ -706,17 +578,43 @@ void IRAM_ATTR pal_sync(uint16_t* line, int i)
 uint8_t _audio_buffer[1024];
 uint32_t _audio_r = 0;
 uint32_t _audio_w = 0;
+// Optional audio shaping
+#ifndef AUDIO_DITHER
+#define AUDIO_DITHER 0
+#endif
+#ifndef AUDIO_GAIN_NUM
+#define AUDIO_GAIN_NUM 1
+#endif
+#ifndef AUDIO_GAIN_DEN
+#define AUDIO_GAIN_DEN 1
+#endif
+
 void audio_write_16(const int16_t* s, int len, int channels)
 {
     int b;
+    static uint32_t dither = 1;
     while (len--) {
         if (_audio_w == (_audio_r + sizeof(_audio_buffer)))
             break;
         if (channels == 2) {
-            b = (s[0] + s[1]) >> 9;
+            // Mix down stereo and scale to 6-bit range [-32,31]
+            // Sum can be up to ~65534; >>11 maps peak to ~32
+            b = (s[0] + s[1]) >> 11;
             s += 2;
-        } else
-            b = *s++ >> 8;
+        } else {
+            // Mono: >>10 maps peak 32767 to ~32
+            b = *s++ >> 10;
+        }
+        // Small adjustable gain
+        b = (b * AUDIO_GAIN_NUM) / AUDIO_GAIN_DEN;
+#if AUDIO_DITHER
+        // Triangular PDF dither at ~1 LSB
+        dither = 1664525U * dither + 1013904223U;
+        int d0 = (dither >> 30) & 1;
+        dither = 1664525U * dither + 1013904223U;
+        int d1 = (dither >> 30) & 1;
+        b += (d0 - d1);
+#endif
         if (b < -32) b = -32;
         if (b > 31) b = 31;
         _audio_buffer[_audio_w++ & (sizeof(_audio_buffer)-1)] = b + 32;
