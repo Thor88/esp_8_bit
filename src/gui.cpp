@@ -16,6 +16,8 @@
 
 #include "emu.h"
 #include "config.h"
+#include "FS.h"
+#include "SD.h"
 
 using namespace std;
 
@@ -568,47 +570,41 @@ public:
         return -1;
     }
 
-    // map to sort
+    // SD-only: scan a directory using Arduino SD File API
     void read_directory(const char* name)
     {
         _files.clear();
-        std::map<string,int> files;  // sort by name
-        // Try the provided path first
-        printf("[GUI] read_directory: trying '%s'\n", name);
-        const char* path = name;
-        DIR* dirp = opendir(path);
-        if (!dirp) {
-            // Fallback to "/spiffs" prefixed path if root mount differs
-            static char alt[256];
-            snprintf(alt,sizeof(alt),"/spiffs%s", name);
-            printf("[GUI] read_directory: trying fallback '%s'\n", alt);
-            dirp = opendir(alt);
-            if (dirp)
-                path = alt;
+        printf("[GUI] read_directory: scanning '%s'\n", name);
+
+        File root = SD.open(name);
+        if (!root) {
+            printf("[GUI] read_directory: failed to open '%s'\n", name);
+            return;
         }
-        if (!dirp) {
-            _path = name;
-            printf("[GUI] read_directory: failed opening '%s' and '/spiffs%s'\n", name, name);
-            return;             // no folder yet
+        if (!root.isDirectory()) {
+            printf("[GUI] read_directory: '%s' is not a directory\n", name);
+            root.close();
+            return;
         }
-        _path = path;
-        printf("[GUI] read_directory: scanning '%s'\n", _path.c_str());
-        struct dirent * dp;
-        while ((dp = readdir(dirp)) != NULL) {
-            if (dp->d_type == DT_DIR) {
-                // directory
-            } else {
-                string ext = get_ext(dp->d_name);
-                int e = want(ext.c_str());
-                if (e != -1)
-                    files[dp->d_name] = e;
-            }
+
+        std::map<std::string,int> files;
+        for (File f = root.openNextFile(); f; f = root.openNextFile()) {
+            if (f.isDirectory()) { f.close(); continue; }
+            std::string fn = f.name();
+            std::string ext = get_ext(fn);
+            if (want(ext.c_str()) != -1)
+                files[fn] = 1; // sorted by key
+            f.close();
         }
-        for (auto& p : files)
+        root.close();
+
+        _path = name;
+        for (auto& p : files) {
             _files.push_back(p.first);
-        closedir(dirp);
-        printf("[GUI] read_directory: found %d file(s) in '%s'\n", (int)_files.size(), _path.c_str());
-    }
+            printf("[GUI] read_directory: file '%s'\n", p.first.c_str());
+        }
+
+        printf("[GUI] read_directory: using '%s', found %d file(s)\n", _path.c_str(), (int)_files.size());}
 
     void draw_menu(int x, const char* name, bool selected)
     {
@@ -665,7 +661,15 @@ public:
     void insert(const string& path, int flags)
     {
         set_pref("recent",path);
-        _emu->insert(_path + "/" + path,flags);
+        std::string full = _path + "/" + path;
+        printf("[GUI] insert: name='%s' full='%s' flags=%d\n", path.c_str(), full.c_str(), flags);
+        int r = _emu->insert(full,flags);
+        if (r != 0) {
+            msg("Failed to load ROM");
+            printf("[GUI] insert: failed to load '%s' (code=%d)\n", full.c_str(), r);
+        } else {
+            printf("[GUI] insert: started '%s'\n", full.c_str());
+        }
     }
 
     // insert_disk removed (Atari-only)
@@ -678,6 +682,11 @@ public:
         int flags = 1;
         if (mods & 2)
             flags |= 2; // shift key
+        if (_files.empty()) {
+            printf("[GUI] enter: no files to insert\n");
+            return;
+        }
+        printf("[GUI] enter: hilited=%d name='%s' flags=%d\n", _hilited, _files[_hilited].c_str(), flags);
         insert(_files[_hilited],flags);
         _visible = false;
     }
@@ -700,13 +709,13 @@ public:
     // disk_key removed
 
     // raw keycode
-    bool key(int keycode, int pressed, int mods)
+bool key(int keycode, int pressed, int mods)
     {
         #ifndef GUI_DEBUG
-        #define GUI_DEBUG 0
+        #define GUI_DEBUG 1
         #endif
         #if GUI_DEBUG
-        printf("key:%02X %02X %02X\n",keycode,pressed,mods);
+        printf("[GUI] key: code=%02X pressed=%d mods=%02X visible=%d\n",keycode,pressed,mods,_visible);
         #endif
         if (pressed && _visible)
             _click = 1;
@@ -728,6 +737,7 @@ public:
                     break;
                 case KEYCODE_REFRESH:
                     if (!_path.empty()) {
+                        printf("[GUI] refresh: rescanning '%s'\n", _path.c_str());
                         read_directory(_path.c_str());
                         if (_hilited >= (int)_files.size())
                             _hilited = _files.empty() ? 0 : (int)_files.size()-1;
@@ -757,26 +767,13 @@ public:
 
     void insert_default(const char* path)
     {
-        // Try multiple known locations, old and new
-        const char* candidates[] = {
-            path,                 // caller-provided
-            "/NesRoms",          // new default
-            "/nofrendo",         // legacy default
-            "/spiffs/NesRoms",   // SPIFFS-mounted variant
-            "/spiffs/nofrendo",  // SPIFFS-mounted legacy
-            nullptr
-        };
-
-        for (int i = 0; candidates[i]; i++) {
-            read_directory(candidates[i]);
-            if (!_files.empty())
-                break;
-        }
+        // SD-only default ROM directory (Arduino SD root)
+        printf("[GUI] insert_default: scanning '/NesRoms'\n");
+        read_directory("/NesRoms");
 
         int recent = find_file(get_pref("recent"));
         _hilited = (_files.empty() ? 0 : (recent == -1 ? 0 : recent));
-        _visible = true;
-    }
+        _visible = true;}
 
     void update_video()
     {
@@ -789,17 +786,24 @@ public:
             _overlay->set_hilite(true);
             _overlay->plot_str(" NES ROMs ", 1, 0);
             _overlay->set_hilite(false);
+            // Show current path and file count on row 1
+            {
+                std::string header2 = std::string("Path: ") + _path + " (" + ::to_string((int)_files.size()) + ")";
+                int maxw = _overlay->OVERLAY_WIDTH - 2;
+                if ((int)header2.size() > maxw) header2.resize(maxw);
+                _overlay->plot_str(header2.c_str(), 1, 1);
+            }
             if (_files.empty() && !_path.empty()) read_directory(_path.c_str());
             if (_files.empty()) {
                 _overlay->plot_str("No ROMs found!", 1, 2);
-                _overlay->plot_str("Put .nes files in data/NesRoms", 1, 3);
-                _overlay->plot_str("and build/restart.", 1, 4);
+                _overlay->plot_str("Put .nes files on SD in /NesRoms", 1, 3);
+                _overlay->plot_str("Press X to refresh.", 1, 4);
             } else {
-                int max_rows = _overlay->OVERLAY_HEIGHT - 2;
+                int max_rows = _overlay->OVERLAY_HEIGHT - 3; // leave room for title + path line
                 int start = _scroll;
                 int end = start + max_rows;
                 if (end > (int)_files.size()) end = (int)_files.size();
-                for (int i = start, row = 1; i < end; i++, row++) {
+                for (int i = start, row = 2; i < end; i++, row++) {
                     bool sel = (i == _hilited);
                     _overlay->set_hilite(sel);
                     std::string name = _files[i];
@@ -870,3 +874,5 @@ bool gui_is_visible()
 {
     return _gui._visible;
 }
+
+

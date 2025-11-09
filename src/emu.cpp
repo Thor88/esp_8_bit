@@ -26,6 +26,7 @@ using namespace std;
 #include <esp_spi_flash.h>
 #include <esp_attr.h>
 #include <esp_partition.h>
+#include <SD.h>
 #ifndef MINIZ_NO_STDIO
 #define MINIZ_NO_STDIO 1
 #endif
@@ -148,8 +149,15 @@ public:
     int copy(const std::string& path, int offset, int len)
     {
         FILE *f = fopen(path.c_str(), "rb");
-        if (!f)
-            return -1;
+        File sf;
+        bool use_sd = false;
+        if (!f) {
+            // Fallback to Arduino SD
+            sf = SD.open(path.c_str(), FILE_READ);
+            if (!sf)
+                return -1;
+            use_sd = true;
+        }
         #define BUF_SIZE 4096
         uint8_t* buf = new uint8_t[BUF_SIZE];
         esp_err_t err;
@@ -158,14 +166,20 @@ public:
             int n = len-i;
             if (n > BUF_SIZE)
                 n = BUF_SIZE;
-            fread(buf,1,n,f);
+            if (use_sd) {
+                int r = sf.read(buf, n);
+                if (r <= 0) { err = ESP_FAIL; break; }
+            } else {
+                size_t r = fread(buf,1,n,f);
+                if ((int)r != n) { err = ESP_FAIL; break; }
+            }
             printf("CrapFS::copy writing %d of %d\n",i,len);
             err = esp_partition_write(_part, i + offset, buf, n);
             if (err)
                 break;
             i += n;
         }
-        fclose(f);
+        if (use_sd) sf.close(); else fclose(f);
         delete buf;
         return err;
     }
@@ -201,22 +215,19 @@ public:
 
 uint8_t* map_file(const char* path, int len)
 {
-    CrapFS _fs;
-    FlashFile* file = _fs.find(path);   // already copied?
-    if (!file)
-        file = _fs.create(path,len);    // need to create a new file
-    if (!file) {
-        _fs.reformat();
-        file = _fs.create(path,len);    // need to create a new file after reformatting the cache
-    }
-    return _fs.mmap(file);
+    // SD-only build: avoid flash mapping/caching. Load into RAM.
+    uint8_t* d = nullptr;
+    int l = len;
+    if (Emu::load(std::string(path), &d, &l) == 0)
+        return d;
+    return nullptr;
 }
 
 void unmap_file(uint8_t* ptr)
 {
-    if (_file_handle)
-        spi_flash_munmap(_file_handle);
-    _file_handle = 0;
+    // SD-only path: free the RAM buffer allocated in map_file/load
+    if (ptr)
+        free(ptr);
 }
 
 FILE* mkfile(const char* path)
@@ -333,12 +344,26 @@ const uint32_t* Emu::composite_palette()
 int Emu::head(const std::string& path, uint8_t* data, int len)
 {
     FILE *f = fopen(path.c_str() , "rb");
-    if (!f)
-        return -1;
-    fread(data,1,len,f);
-    fseek(f, 0, SEEK_END);
-    int flen =(int)ftell(f);
-    fclose(f);
+    if (f) {
+        printf("Emu::head fopen OK for %s\n", path.c_str());
+        fread(data,1,len,f);
+        fseek(f, 0, SEEK_END);
+        int flen =(int)ftell(f);
+        fclose(f);
+        return flen;
+    }
+    // Fallback to Arduino SD
+    printf("Emu::head fopen failed, trying SD for %s\n", path.c_str());
+    File sf = SD.open(path.c_str(), FILE_READ);
+    if (!sf) return -1;
+    int out = 0;
+    while (sf.available() && out < len) {
+        int r = sf.read(data + out, len - out);
+        if (r <= 0) break;
+        out += r;
+    }
+    int flen = (int)sf.size();
+    sf.close();
     return flen;
 }
 
@@ -347,23 +372,63 @@ int Emu::load(const std::string& path, uint8_t** data, int* len)
     *data = 0;
     *len = 0;
     FILE *f = fopen(path.c_str(), "rb");
-    if (!f) {
-        printf("Emu::load failed for %s\n",path.c_str());
-        return -1;
-    }
-    fseek(f, 0, SEEK_END);
-    int fsize = (int)ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t* d = new uint8_t[fsize];
-    if (!d) {
-        printf("Emu::load failed for %s (out of memory)\n",path.c_str());
+    if (f) {
+        printf("Emu::load fopen OK for %s\n", path.c_str());
+        fseek(f, 0, SEEK_END);
+        int fsize = (int)ftell(f);
+        fseek(f, 0, SEEK_SET);
+        printf("Emu::load: fopen size=%d for %s\n", fsize, path.c_str());
+        uint8_t* d = (uint8_t*)malloc(fsize);
+        if (!d) {
+            printf("Emu::load failed for %s (out of memory malloc %d)\n",path.c_str(), fsize);
+            fclose(f);
+            return -1;
+        }
+        size_t rd = fread(d, 1, fsize, f);
         fclose(f);
+        if ((int)rd != fsize) {
+            printf("Emu::load fread short: %d/%d for %s\n", (int)rd, fsize, path.c_str());
+            free(d);
+            return -1;
+        }
+        printf("Emu::load %d bytes %s\n",fsize,path.c_str());
+        *data = d;
+        *len = fsize;
+        return 0;
+    }
+    // Fallback to Arduino SD
+    printf("Emu::load fopen failed, trying SD for %s\n", path.c_str());
+    File sf = SD.open(path.c_str(), FILE_READ);
+    if (!sf) {
+        printf("Emu::load failed for %s (not found)\n",path.c_str());
         return -1;
     }
-    fread(d, 1, fsize, f);
-    fclose(f);
-
-    printf("Emu::load %d bytes %s\n",fsize,path.c_str());
+    int fsize = (int)sf.size();
+    printf("Emu::load: SD size=%d for %s\n", fsize, path.c_str());
+    if (fsize <= 0 || fsize > (2*1024*1024)) {
+        printf("Emu::load size invalid: %d for %s\n", fsize, path.c_str());
+        sf.close();
+        return -1;
+    }
+    uint8_t* d = (uint8_t*)malloc(fsize);
+    if (!d) {
+        printf("Emu::load failed for %s (out of memory malloc %d)\n",path.c_str(), fsize);
+        sf.close();
+        return -1;
+    }
+    int off = 0;
+    while (off < fsize) {
+        int r = sf.read(d + off, fsize - off);
+        if (r <= 0) break;
+        off += r;
+    }
+    sf.close();
+    if (off != fsize) {
+        printf("Emu::load SD read short: %d/%d for %s\n", off, fsize, path.c_str());
+        free(d);
+        return -1;
+    }
+    printf("Emu::load %d bytes %s (SD)\n",fsize,path.c_str());
     *data = d;
     *len = fsize;
     return 0;

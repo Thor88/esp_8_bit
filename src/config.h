@@ -22,7 +22,7 @@
 
 // Audio pin (can be remapped to a free GPIO)
 #ifndef AUDIO_PIN
-#define AUDIO_PIN 18
+#define AUDIO_PIN 26  // moved from 18 to avoid conflict with SD SCK on 18
 #endif
 
 // Keycode mappings used by GUI and adapters

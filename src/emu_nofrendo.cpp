@@ -334,14 +334,26 @@ public:
         }
 
         printf("nofrendo %s is %d bytes\n",path.c_str(),len);
+        // Peek at iNES header
+        printf("iNES hdr: %02X %02X %02X %02X | PRG=%d*16KB CHR=%d*8KB flags6=%02X flags7=%02X\n",
+               h[0],h[1],h[2],h[3], h[4], h[5], h[6], h[7]);
         _nofrendo_rom = map_file(path.c_str(),len);
         if (!_nofrendo_rom) {
             printf("nofrendo can't map %s\n",path.c_str());
             return -1;
         }
+        // Basic sanity on iNES header to avoid hard aborts inside nofrendo
+        if (!(_nofrendo_rom[0] == 'N' && _nofrendo_rom[1] == 'E' && _nofrendo_rom[2] == 'S' && _nofrendo_rom[3] == 0x1A)) {
+            printf("nofrendo: invalid iNES header: %02X %02X %02X %02X\n",
+                   _nofrendo_rom[0], _nofrendo_rom[1], _nofrendo_rom[2], _nofrendo_rom[3]);
+            return -1;
+        }
+        printf("nofrendo: header valid, proceeding to init\n");
 
+        printf("nofrendo: calling nes_emulate_init()\n");
         nes_emulate_init(path.c_str(),width,height);
         _lines = nes_emulate_frame(true);   // first frame!
+        printf("nofrendo: first frame generated\n");
         return 0;
     }
 

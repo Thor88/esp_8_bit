@@ -10,7 +10,7 @@
  */
 
 #include "esp_system.h"
-#include "esp_spiffs.h"
+// SPIFFS disabled: using SD (VFS FAT) only
 
 // Include Arduino helpers for CPU frequency management.  These
 // functions (setCpuFrequencyMhz() and getCpuFrequencyMhz()) are
@@ -18,13 +18,15 @@
 // rtc_clk_cpu_freq_set() and rtc_clk_cpu_freq_get() APIs.
 #include "esp32-hal-cpu.h"
 
-#define PERF  // some stats about where we spend our time
+// #define PERF  // perf stats (disabled for testing)
 #include "src/emu.h"
 #include "src/video_out.h"
 
 // Include the Bluepad32 adapter.  This header declares the
 // bluepad_setup() and bluepad_update() functions used below.
 #include "bluepad_adapter.h"
+#include <SD.h>
+#include <SPI.h>
 
 //  Choose one of the video standards: PAL,NTSC
 #define VIDEO_STANDARD NTSC
@@ -48,7 +50,7 @@ bool _inited = false;
 
 void emu_init()
 {
-    // NES ROMs folder on SPIFFS
+    // NES ROMs folder on SD (Arduino SD root)
     std::string folder = "/NesRoms";
     gui_start(_emu,folder.c_str());
     _drawn = _frame_counter;
@@ -84,20 +86,29 @@ void emu_task(void* arg)
 
 esp_err_t mount_filesystem()
 {
-  printf("\n\n\nesp_8_bit\n\nmounting spiffs (will take ~15 seconds if formatting for the first time)....\n");
-  uint32_t t = millis();
-  esp_vfs_spiffs_conf_t conf = {
-    .base_path = "",
-    .partition_label = NULL,
-    .max_files = 5,
-    .format_if_mount_failed = true  // force?
-  };
-  esp_err_t e = esp_vfs_spiffs_register(&conf);
-  if (e != 0)
-    printf("Failed to mount or format filesystem: %d. Use 'ESP32 Sketch Data Upload' from 'Tools' menu\n",e);
-  vTaskDelay(1);
-  printf("... mounted in %d ms\n",millis()-t);
-  return e;
+  Serial.begin(115200);
+  Serial.println("\nesp_8_bit\n\nmounting SD (Arduino SD)...");
+
+  // Use VSPI default pins: MOSI=23, MISO=19, SCK=18, CS=5
+  const int PIN_NUM_MISO = 19;
+  const int PIN_NUM_MOSI = 23;
+  const int PIN_NUM_CLK  = 18;
+  const int PIN_NUM_CS   = 5;
+
+  SPI.begin(PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_NUM_CS);
+  uint32_t freqs[] = { 20000000, 10000000, 8000000, 4000000, 1000000 };
+  for (size_t i = 0; i < sizeof(freqs)/sizeof(freqs[0]); ++i) {
+    Serial.printf("Trying SD.begin(CS=%d, freq=%u Hz) ...\n", PIN_NUM_CS, freqs[i]);
+    if (SD.begin(PIN_NUM_CS, SPI, freqs[i])) {
+      uint8_t cardType = SD.cardType();
+      Serial.print("SD mounted. Type: ");
+      Serial.println(cardType == CARD_MMC ? "MMC" : cardType == CARD_SD ? "SDSC" : cardType == CARD_SDHC ? "SDHC" : "UNKNOWN");
+      return ESP_OK;
+    }
+    Serial.println("  SD.begin failed");
+  }
+  Serial.println("SD mount failed after retries.");
+  return ESP_FAIL;
 }
 
 void setup()
@@ -180,5 +191,6 @@ void loop()
   // Dump some stats
   perf();
 }
+
 
 

@@ -10,7 +10,7 @@
     |         |
     |      25 |------------------> video out
     |         |
-    |      18 |---/\/\/\/----|---> audio out
+    |      26 |---/\/\/\/----|---> audio out
     |         |     1k       |
     |         |             ---
     |  ESP32  |             --- 10nf
@@ -23,7 +23,7 @@
     -----------
 
 ```
-Audio is on pin 18 by default but can be remapped.
+Audio is on pin 26 by default (remapped to free 18 for SD SCK) but can be changed in `src/config.h`.
 
 Before you compile the sketch set the video standard:
 ```
@@ -55,9 +55,11 @@ Supported Bluetooth gamepads are handled via Bluepad32.
 - Select: Select
 - Y: toggle menu
 
-## ROMs Folder
+## ROMs on SD (SD-only)
 
-Place your NES ROMs (`.nes`) in the SPIFFS data folder `data/NesRoms` within the project. Use the Arduino "ESP32 Sketch Data Upload" tool to upload the `data` folder to the device. On boot, the app scans `/NesRoms` and lists all `.nes` files for selection.
+Place your NES ROMs (`.nes`) on a microSD card under `/NesRoms` (for example: `/NesRoms/chase.nes`). The GUI scans `/NesRoms` at startup. You can press the Refresh key (X on the gamepad) while the menu is open to re-scan.
+
+SD wiring (VSPI defaults): SCK=18, MISO=19, MOSI=23, CS=5. Format the card as FAT32.
 
 # How it works
 
@@ -144,7 +146,7 @@ This build targets gamepads via Bluepad32 only.
 
 # Time to Play
 
-If you would like to upload your own media copy them into the appropriate subfolder named for each of the emulators in the data folder. Note that the SPIFFS filesystem is fussy about filenames, keep them short, no spaces allowed. Use '[ESP32 Sketch Data Upload](https://randomnerdtutorials.com/install-esp32-filesystem-uploader-arduino-ide/)' from the 'Tools' menu to copy a prepared data folder to ESP32.
+If you would like to use your own media, copy `.nes` files onto the SD card under `/NesRoms`. Filenames should be reasonably short and use standard ASCII characters to ensure compatibility.
 
 Play through the included demos. Load up your own. Finally get around to finishing that NES classic.
 
