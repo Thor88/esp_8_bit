@@ -25,6 +25,13 @@
 int _pal_ = 0;
 
 #ifdef ESP_PLATFORM
+#ifdef ARDUINO
+#include <Arduino.h>
+#endif
+#include <math.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include "esp_types.h"
 #include "esp_heap_caps.h"
 #include "esp_attr.h"

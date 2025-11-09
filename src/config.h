@@ -38,9 +38,3 @@
 
 #define KEYCODE_A_EMU        225   // Emu A (Left Shift)
 #define KEYCODE_B_EMU        226   // Emu B (Option)
-
-// Demo ROM population (optional). When set to 1 and the ROM folder is empty,
-// bundled demo ROMs may be unpacked on first boot. Default: disabled.
-#ifndef POPULATE_DEFAULT_ROMS
-#define POPULATE_DEFAULT_ROMS 0
-#endif

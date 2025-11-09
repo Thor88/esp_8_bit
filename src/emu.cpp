@@ -26,6 +26,9 @@ using namespace std;
 #include <esp_spi_flash.h>
 #include <esp_attr.h>
 #include <esp_partition.h>
+#ifndef MINIZ_NO_STDIO
+#define MINIZ_NO_STDIO 1
+#endif
 #include "miniz.h"
 
 // only map 1 file at a time
@@ -223,6 +226,9 @@ FILE* mkfile(const char* path)
 
 #else
 #include <sys/stat.h>
+#ifndef MINIZ_NO_STDIO
+#define MINIZ_NO_STDIO 1
+#endif
 #include "../miniz.h"
 
 uint8_t* map_file(const char* path, int len)

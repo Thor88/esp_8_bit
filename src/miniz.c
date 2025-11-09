@@ -1,9 +1,9 @@
-#include "miniz.h"
 // Suppress stdio-based file I/O path and its pragma message; we don't use
 // miniz's stdio ZIP APIs in this build.
 #ifndef MINIZ_NO_STDIO
 #define MINIZ_NO_STDIO 1
 #endif
+#include "miniz.h"
 /**************************************************************************
  *
  * Copyright 2013-2014 RAD Game Tools and Valve Software

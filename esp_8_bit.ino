@@ -63,7 +63,9 @@ void emu_loop()
     uint32_t t = xthal_get_ccount();
     gui_update();
     _frame_time = xthal_get_ccount() - t;
-    _lines = _emu->video_buffer();
+    uint8_t** vb = _emu->video_buffer();
+    if (vb)
+      _lines = vb;
     _drawn++;
 }
 
@@ -106,6 +108,22 @@ void setup()
   setCpuFrequencyMhz(240);
   mount_filesystem();                       // mount the filesystem!
   _emu = NewEmulator();                     // create the emulator!
+  // Seed a blank framebuffer so the A/V pump can start before a ROM is loaded
+  {
+    extern uint8_t** _lines;
+    static uint8_t** _boot_lines = nullptr;
+    static uint8_t* _boot_fb = nullptr;
+    if (_lines == nullptr) {
+      int w = _emu->width;
+      int h = _emu->height;
+      _boot_lines = (uint8_t**)MALLOC32(sizeof(uint8_t*) * h, "boot_lines");
+      _boot_fb = (uint8_t*)MALLOC32(w * h, "boot_fb");
+      memset(_boot_fb, 0, w * h);
+      for (int y = 0; y < h; y++)
+        _boot_lines[y] = _boot_fb + y * w;
+      _lines = _boot_lines;
+    }
+  }
   bluepad_setup();                          // initialise Bluepad32 for gamepad support
 
   #ifdef SINGLE_CORE
@@ -162,3 +180,5 @@ void loop()
   // Dump some stats
   perf();
 }
+
+

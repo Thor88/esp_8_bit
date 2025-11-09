@@ -1,4 +1,3 @@
-
 /* Copyright (c) 2020, Peter Barrett
 **
 ** Permission to use, copy, modify, and/or distribute this software for
@@ -35,8 +34,17 @@ string get_ext(const string& s)
 string to_string(int i)
 {
     char buf[32];
-    sprintf(buf,"%d",i);
-    return buf;
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+}
+
+static std::map<std::string,std::string> _prefs;
+std::string get_pref(const std::string& key) {
+    auto it = _prefs.find(key);
+    return it == _prefs.end() ? std::string() : it->second;
+}
+void set_pref(const std::string& key, const std::string& value) {
+    _prefs[key] = value;
 }
 
 const uint8_t _font[2048] = {
@@ -360,6 +368,11 @@ public:
         memset(_buf,0,OVERLAY_WIDTH*OVERLAY_HEIGHT);
     }
 
+    void set_lines(uint8_t** lines)
+    {
+        _lines = lines;
+    }
+
     void set_hilite(int c)
     {
         _hilite = c;
@@ -382,6 +395,8 @@ public:
     // draw a note at bottom of screen
     void draw_msg(const string& msg)
     {
+        if (!_lines)
+            return;
         int n = (int)msg.size();
         for (int i = 0; i < n; i++) {
             int x = i - n/2 + _width/16;
@@ -394,6 +409,8 @@ public:
 
     void erase_msg()
     {
+        if (!_lines)
+            return;
         for (int i = _height-16; i < _height-8; i++)
         {
             uint32_t* d = (uint32_t*)_lines[i];
@@ -471,6 +488,8 @@ public:
 
     void update()
     {
+        if (!_lines)
+            return;
         uint8_t* s = _buf;
         int xx = (_width-OVERLAY_WIDTH*8) >> 4;
         int yy = (_height-OVERLAY_HEIGHT*8) >> 4;
@@ -553,7 +572,7 @@ public:
     {
         _path = name;
         _files.clear();
-        map<string,int> files;  // sort by name
+        std::map<string,int> files;  // sort by name
         DIR* dirp = opendir(name);
         if (!dirp)
             return;             // no folder yet
@@ -674,8 +693,8 @@ public:
         if (pressed && _visible)
             _click = 1;
 
-        if (pressed && keycode == 58) { // F1 - GUI key
-            _visible = !_visible;       // toggle GUi
+                if (pressed && keycode == 58) { // F1 - GUI key
+            _visible = !_visible;       // toggle GUI
             if (_visible)
                 _overlay->frame();      // draw the frame when it first appears
             _click = 1;
@@ -708,179 +727,48 @@ public:
         return true;
     }
 
-    void menu()
-    {
-        int h = 0;
-        for (int i = 0; _menu[i]; i++) {
-            const char* item = _menu[i];
-            draw_menu(h,item,i == _tab);
-            h += 1 + strlen(item) + 1;
-        }
-        _overlay->fill(1,0,_overlay->OVERLAY_WIDTH,'_');
-    }
-
-    int item_y(int i)
-    {
-        int y = 2+i;
-        //if (_tab == 0)
-            y -= _scroll;
-        if (y <= 1 || y >= _overlay->OVERLAY_HEIGHT)
-            return -1;
-        return y;
-    }
-
-    void draw_item(int i, const char* str, bool selected)
-    {
-        int y = item_y(i);
-        if (y < 0)
-            return;
-        _overlay->set_hilite(selected);
-        _overlay->fill(y,0,_overlay->OVERLAY_WIDTH-1,' ');
-        _overlay->plot_str(str,1,y);
-        _overlay->set_hilite(0);
-    }
-
-    int range(int i)
-    {
-        i *= _overlay->OVERLAY_HEIGHT-4;
-        return (i + count()/2)/count();
-    }
-
-    void scrollbar()
-    {
-        int h = _overlay->OVERLAY_HEIGHT;
-        int w = _overlay->OVERLAY_WIDTH;
-
-        _overlay->plot_str("\x1C",w-1,2);
-        _overlay->plot_str("\x1D",w-1,h-1);
-        _scroll = min(_hilited,_scroll);
-        _scroll = max(_hilited-(h-3),_scroll);
-
-        for (int i = 0; i < (h-4); i++)
-            _overlay->plot_str(" ",w-1,i+3);
-        int b = h-4;
-        int top = 0;
-        if (count() > (h-2)) {
-            b = max(1,range(h-2));
-            top = range(_scroll);
-        }
-        for (int i = 0; i < b; i++)
-            _overlay->plot_str("|",w-1,top+i+3);
-    }
-
-    void draw_icon(int index, int icon)
-    {
-        int y = item_y(index);
-        if (y < 0)
-            return;
-        _overlay->plot_char(icon+128,0,y);
-    }
-
-    // draw_disk removed
-
-    void draw_files()
-    {
-        int i;
-        for (i = 0; i < (int)_files.size(); i++) {
-            string c = _files[i];
-            int w = _overlay->OVERLAY_WIDTH-2;
-            if (c.length() > w)
-                c.resize(w);
-            draw_item(i,c.c_str(),i == _hilited);
-        }
-        clear(i);
-    }
-
-    void draw_help()
-    {
-        const char** s = _emu->_help;
-        if (!s)
-            return;
-        int i;
-        for (i = 0; s[i]; i++)
-            draw_item(i,s[i],false);
-        clear(i);
-    }
-
-    void clear(int i)
-    {
-        while (i < _overlay->OVERLAY_HEIGHT - 2)
-            draw_item(i++," ",false);
-    }
-
-    void draw_info()
-    {
-        if (_dirty) {
-            _dirty = false;
-            _info.clear();
-            int index = _tab_hilited[0];
-            _emu->info(_path + "/" + _files[index],_info);
-        }
-        int i;
-        for (i = 0; i < (int)_info.size(); i++)
-            draw_item(i,_info[i].c_str(),false);
-        clear(i);
-    }
-
-    string get_pref(const string& key) {
-        return "";
-    }
-
-    void set_pref(const string& key, const string& value) {
-        // optional: store key/value in a global map if you want persistence
-    }
-
     void insert_default(const char* path)
     {
         read_directory(path);
-        if (_files.empty()) {
-            _emu->make_default_media(_path);
-            read_directory(path);
-        }
-
         int recent = find_file(get_pref("recent"));
-
-        // disk reinsertion removed
-
-        // just insert the first one
-        if (_files.empty()) {
-            _visible = true;
-        } else {
-            _hilited = recent == -1 ? 0 : recent;
-            enter(0);
-        }
+        _hilited = (_files.empty() ? 0 : (recent == -1 ? 0 : recent));
+        _visible = true;
     }
 
     void update_video()
     {
         if (_visible) {
-            menu();
-            scrollbar();
-            switch (_tab) {
-                case 0: draw_files(); break;
-                case 1: draw_info(); break;
-                case 2: draw_help(); break;
+            extern uint8_t** _lines;
+            _overlay->set_lines(_lines);
+            for (int y = 0; y < _overlay->OVERLAY_HEIGHT; y++)
+                for (int x = 0; x < _overlay->OVERLAY_WIDTH; x++)
+                    _overlay->plot_char(' ',x,y);
+            _overlay->set_hilite(true);
+            _overlay->plot_str(" NES ROMs ", 1, 0);
+            _overlay->set_hilite(false);
+            if (_files.empty()) {
+                _overlay->plot_str("Put .nes files in", 1, 2);
+                _overlay->plot_str("/NesRoms and upload data.", 1, 3);
+            } else {
+                int max_rows = _overlay->OVERLAY_HEIGHT - 2;
+                int start = _scroll;
+                int end = start + max_rows;
+                if (end > (int)_files.size()) end = (int)_files.size();
+                for (int i = start, row = 1; i < end; i++, row++) {
+                    bool sel = (i == _hilited);
+                    _overlay->set_hilite(sel);
+                    std::string name = _files[i];
+                    if ((int)name.size() > (_overlay->OVERLAY_WIDTH-2))
+                        name.resize(_overlay->OVERLAY_WIDTH-2);
+                    _overlay->plot_str(name.c_str(), 1, row);
+                }
+                _overlay->set_hilite(false);
             }
             _overlay->update();
         } else {
             _emu->update();
         }
-
-        // message goes over both
-        if (_msg.size()) {
-            if (--_msg_ticks == 0) {
-                _overlay->erase_msg();
-                _msg.clear();
-            } else
-                _overlay->draw_msg(_msg);
-        }
     }
-
-    // soft click wave soundy thing
-    const uint16_t _wav[16] =  {
-        0x0000,0x187D,0x2D41,0x3B20,0x3FFF,0x3B20,0x2D41,0x187D,
-        0x0000,0xE783,0xD2BF,0xC4E0,0xC001,0xC4E0,0xD2BF,0xE783
-    };
 
     void update_audio()
     {
@@ -891,15 +779,21 @@ public:
             format = 1;
             if (_click) {
                 _click = 0;
+                static const uint16_t _wav[16] = {
+                    0x0000,0x187D,0x2D41,0x3B20,0x3FFF,0x3B20,0x2D41,0x187D,
+                    0x0000,0xE783,0xD2BF,0xC4E0,0xC001,0xC4E0,0xD2BF,0xE783
+                };
                 for (int i = 0; i < sample_count; i++)
-                    abuffer[i] = _wav[i&0xF];  // just a signed sine click
-            } else
-              memset(abuffer,0,sizeof(abuffer));
+                    abuffer[i] = _wav[i&0xF];
+            } else {
+                memset(abuffer,0,sizeof(abuffer));
+            }
         } else {
             sample_count = _emu->audio_buffer(abuffer,sizeof(abuffer));
         }
         audio_write_16(abuffer,sample_count,format);
     }
+
 };
 
 Overlay _overlay;
@@ -931,7 +825,4 @@ bool gui_is_visible()
 {
     return _gui._visible;
 }
-
-//==================================================================
-//==================================================================
 
