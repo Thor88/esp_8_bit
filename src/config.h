@@ -38,3 +38,8 @@
 
 #define KEYCODE_A_EMU        225   // Emu A (Left Shift)
 #define KEYCODE_B_EMU        226   // Emu B (Option)
+// Optional: refresh ROM list while menu is open
+// Optional: refresh ROM list while menu is open
+#ifndef KEYCODE_REFRESH
+#define KEYCODE_REFRESH 62  // F5
+#endif

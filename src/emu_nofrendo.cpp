@@ -351,7 +351,6 @@ public:
             _lines = nes_emulate_frame(true);
         return 0;
     }
-
     virtual uint8_t** video_buffer()
     {
         return _lines;

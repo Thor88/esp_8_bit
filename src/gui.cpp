@@ -15,6 +15,7 @@
 */
 
 #include "emu.h"
+#include "config.h"
 
 using namespace std;
 
@@ -570,12 +571,28 @@ public:
     // map to sort
     void read_directory(const char* name)
     {
-        _path = name;
         _files.clear();
         std::map<string,int> files;  // sort by name
-        DIR* dirp = opendir(name);
-        if (!dirp)
+        // Try the provided path first
+        printf("[GUI] read_directory: trying '%s'\n", name);
+        const char* path = name;
+        DIR* dirp = opendir(path);
+        if (!dirp) {
+            // Fallback to "/spiffs" prefixed path if root mount differs
+            static char alt[256];
+            snprintf(alt,sizeof(alt),"/spiffs%s", name);
+            printf("[GUI] read_directory: trying fallback '%s'\n", alt);
+            dirp = opendir(alt);
+            if (dirp)
+                path = alt;
+        }
+        if (!dirp) {
+            _path = name;
+            printf("[GUI] read_directory: failed opening '%s' and '/spiffs%s'\n", name, name);
             return;             // no folder yet
+        }
+        _path = path;
+        printf("[GUI] read_directory: scanning '%s'\n", _path.c_str());
         struct dirent * dp;
         while ((dp = readdir(dirp)) != NULL) {
             if (dp->d_type == DT_DIR) {
@@ -590,6 +607,7 @@ public:
         for (auto& p : files)
             _files.push_back(p.first);
         closedir(dirp);
+        printf("[GUI] read_directory: found %d file(s) in '%s'\n", (int)_files.size(), _path.c_str());
     }
 
     void draw_menu(int x, const char* name, bool selected)
@@ -708,6 +726,16 @@ public:
                 case 40:
                     enter(mods);    // return
                     break;
+                case KEYCODE_REFRESH:
+                    if (!_path.empty()) {
+                        read_directory(_path.c_str());
+                        if (_hilited >= (int)_files.size())
+                            _hilited = _files.empty() ? 0 : (int)_files.size()-1;
+                        _scroll = 0;
+                        _dirty = true;
+                        _click = 1;
+                    }
+                    break;
                 case 82:    // up
                     move_v(-1);
                     break;
@@ -729,7 +757,22 @@ public:
 
     void insert_default(const char* path)
     {
-        read_directory(path);
+        // Try multiple known locations, old and new
+        const char* candidates[] = {
+            path,                 // caller-provided
+            "/NesRoms",          // new default
+            "/nofrendo",         // legacy default
+            "/spiffs/NesRoms",   // SPIFFS-mounted variant
+            "/spiffs/nofrendo",  // SPIFFS-mounted legacy
+            nullptr
+        };
+
+        for (int i = 0; candidates[i]; i++) {
+            read_directory(candidates[i]);
+            if (!_files.empty())
+                break;
+        }
+
         int recent = find_file(get_pref("recent"));
         _hilited = (_files.empty() ? 0 : (recent == -1 ? 0 : recent));
         _visible = true;
@@ -746,9 +789,11 @@ public:
             _overlay->set_hilite(true);
             _overlay->plot_str(" NES ROMs ", 1, 0);
             _overlay->set_hilite(false);
+            if (_files.empty() && !_path.empty()) read_directory(_path.c_str());
             if (_files.empty()) {
-                _overlay->plot_str("Put .nes files in", 1, 2);
-                _overlay->plot_str("/NesRoms and upload data.", 1, 3);
+                _overlay->plot_str("No ROMs found!", 1, 2);
+                _overlay->plot_str("Put .nes files in data/NesRoms", 1, 3);
+                _overlay->plot_str("and build/restart.", 1, 4);
             } else {
                 int max_rows = _overlay->OVERLAY_HEIGHT - 2;
                 int start = _scroll;
@@ -825,4 +870,3 @@ bool gui_is_visible()
 {
     return _gui._visible;
 }
-
