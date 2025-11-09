@@ -1,5 +1,5 @@
 #include <Bluepad32.h>
-extern "C" void gui_key(int keycode, int pressed, int mods);
+#include "src/emu.h"
 
 static ControllerPtr controllers[BP32_MAX_GAMEPADS];
 static bool lastUp[BP32_MAX_GAMEPADS], lastDown[BP32_MAX_GAMEPADS];
