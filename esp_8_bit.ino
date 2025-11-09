@@ -38,10 +38,7 @@
 // Create a new emulator, messy ifdefs ensure that only one links at a time
 Emu* NewEmulator()
 {
-  #if (EMULATOR==EMU_NES)
   return NewNofrendo(VIDEO_STANDARD);
-  #endif
-  printf("Must choose one of the following emulators: EMU_NES,EMU_SMS,EMU_ATARI\n");
 }
 
 Emu* _emu = 0;            // emulator running on core 0
@@ -126,8 +123,10 @@ void perf()
     float elapsed_us = 120*1000000/(_emu->standard ? 60 : 50);
     _next = _drawn + 120;
 
-    printf("frame_time:%d drawn:%d displayed:%d blit_ticks:%d->%d, isr time:%2.2f%%\n",
-      _frame_time/240,_drawn,_frame_counter,_blit_ticks_min,_blit_ticks_max,(_isc:\Users\turlo\Documents\GitHub\esp_8_bit\src\video_out.hr_us*100)/elapsed_us);
+printf("frame_time:%d drawn:%d displayed:%d blit_ticks:%d->%d, isr time:%2.2f%%\n",
+    _frame_time/240, _drawn, _frame_counter,
+    _blit_ticks_min, _blit_ticks_max,
+    (_isr_us * 100) / elapsed_us);
 
     _blit_ticks_min = 0xFFFFFFFF;
     _blit_ticks_max = 0;

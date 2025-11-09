@@ -114,7 +114,6 @@ void make_alt_pal()
         auto p = nes_palette[i];
         pal[i] = (p.r << 16) | (p.g << 8) | p.b;
     }
-    make_yuv_palette("_nes_yuv",pal,64);
 }
 
 static const float _nes_luma[] = {
@@ -361,30 +360,30 @@ public:
     // raw HID data. handle WII/IR mappings
     virtual void hid(const uint8_t* d, int len)
     {
-        if (d[0] != 0x32 && d[0] != 0x42)
-            return;
-        bool ir = *d++ == 0x42;
+        // if (d[0] != 0x32 && d[0] != 0x42)
+        //     return;
+        // bool ir = *d++ == 0x42;
 
-        for (int i = 0; i < 2; i++) {
-            uint32_t p;
-            if (ir) {
-                int m = d[0] + (d[1] << 8);
-                p = generic_map(m,_generic_nes);
-                d += 2;
-            } else
-                p = wii_map(i,_common_nes,_classic_nes);
+        // for (int i = 0; i < 2; i++) {
+        //     uint32_t p;
+        //     if (ir) {
+        //         int m = d[0] + (d[1] << 8);
+        //         p = generic_map(m,_generic_nes);
+        //         d += 2;
+        //     } else
+        //         p = wii_map(i,_common_nes,_classic_nes);
 
-            // reset on select + start held at the same time
-            if ((p & event_joypad1_select_) && (p & event_joypad1_start_))
-                pad(1,event_soft_reset);
+        //     // reset on select + start held at the same time
+        //     if ((p & event_joypad1_select_) && (p & event_joypad1_start_))
+        //         pad(1,event_soft_reset);
 
-            const int* m = i ? _nes_2 : _nes_1;
-            for (int e = 0; m[e]; e++)
-            {
-                pad((p & 1),m[e]);
-                p >>= 1;
-            }
-        }
+        //     const int* m = i ? _nes_2 : _nes_1;
+        //     for (int e = 0; m[e]; e++)
+        //     {
+        //         pad((p & 1),m[e]);
+        //         p >>= 1;
+        //     }
+        // }
     }
 
     /*

@@ -228,7 +228,7 @@ void* MALLOC32(int x, const char* label)
     else
         printf("MALLOC32 allocation of %s:%d %08X\n",label,x,r);
     return r;
-}c:\Users\turlo\Documents\GitHub\esp_8_bit\src\emu.h
+}
 
 #else
 
