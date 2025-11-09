@@ -48,7 +48,8 @@ bool _inited = false;
 
 void emu_init()
 {
-    std::string folder = "/" + _emu->name;
+    // NES ROMs folder on SPIFFS
+    std::string folder = "/NesRoms";
     gui_start(_emu,folder.c_str());
     _drawn = _frame_counter;
 }

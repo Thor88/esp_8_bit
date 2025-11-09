@@ -55,6 +55,10 @@ Supported Bluetooth gamepads are handled via Bluepad32.
 - Select: Select
 - Y: toggle menu
 
+## ROMs Folder
+
+Place your NES ROMs (`.nes`) in the SPIFFS data folder `data/NesRoms` within the project. Use the Arduino "ESP32 Sketch Data Upload" tool to upload the `data` folder to the device. On boot, the app scans `/NesRoms` and lists all `.nes` files for selection.
+
 # How it works
 
 ## Composite Video
