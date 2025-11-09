@@ -789,7 +789,7 @@ void IRAM_ATTR video_isr(volatile void* vbuf)
 
     uint8_t s = _audio_r < _audio_w ? _audio_buffer[_audio_r++ & (sizeof(_audio_buffer)-1)] : 0x20;
     audio_sample(s);
-    //audio_sample(_sin64[_x++ & 0x3F]);
+    // audio_sample(_sin64[_x++ & 0x3F]);
 
 
     int i = _line_counter++;

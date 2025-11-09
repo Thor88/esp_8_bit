@@ -1018,6 +1018,12 @@ void gui_key(int keycode, int pressed, int mods)
         _gui._emu->key(keycode,pressed,mods);
 }
 
+// Expose GUI visibility so input adapters can adjust mappings
+bool gui_is_visible()
+{
+    return _gui._visible;
+}
+
 //==================================================================
 //==================================================================
 // hid keyboard events

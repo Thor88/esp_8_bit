@@ -134,6 +134,7 @@ void gui_start(Emu* emu, const char* path);
 void gui_hid(const uint8_t* hid, int len);  // Parse HID event
 void gui_update();
 void gui_key(int keycode, int pressed, int mod);
+bool gui_is_visible();
 
 extern "C"
 void gui_msg(const char* msg);         // temporarily display a msg
