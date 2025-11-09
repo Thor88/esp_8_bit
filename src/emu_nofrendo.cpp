@@ -16,8 +16,7 @@
 */
 
 #include "emu.h"
-#include "config.h"
-#include "media.h"
+// No default ROMs bundled; user supplies .nes files in /NesRoms
 
 extern "C" {
 #include "nofrendo/osd.h"
@@ -379,12 +378,6 @@ public:
     virtual int make_default_media(const string& path)
     {
         (void)path;
-#if defined(POPULATE_DEFAULT_ROMS) && POPULATE_DEFAULT_ROMS
-        // Optionally unpack bundled demo ROMs if the folder is empty.
-        unpack((path + "/sokoban.nes").c_str(),sokoban_nes,sizeof(sokoban_nes));
-        unpack((path + "/chase.nes").c_str(),chase_nes,sizeof(chase_nes));
-        unpack((path + "/tokumaru_raycast.nes").c_str(),tokumaru_raycast_nes,sizeof(tokumaru_raycast_nes));
-#endif
         return 0;
     }
 };
