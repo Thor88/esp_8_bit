@@ -11,13 +11,23 @@ static bool lastMenu[BP32_MAX_GAMEPADS];
 
 void onConnectedController(ControllerPtr ctl) {
     controllers[ctl->index()] = ctl;
+    printf("Controller %d connected (%s)\n", ctl->index(), ctl->getModelName());
 }
 void onDisconnectedController(ControllerPtr ctl) {
+    printf("Controller %d disconnected\n", ctl->index());
     controllers[ctl->index()] = nullptr;
 }
 
 void bluepad_setup() {
+#if BLUEPAD_FORGET_KEYS_ON_BOOT
+    printf("Bluepad32: forgetting stored Bluetooth keys\n");
+    BP32.forgetBluetoothKeys();
+#endif
     BP32.setup(&onConnectedController, &onDisconnectedController);
+#if BLUEPAD_ENABLE_NEW_CONNECTIONS
+    BP32.enableNewBluetoothConnections(true);
+#endif
+    printf("Bluepad32 ready: enable connections=%d\n", BLUEPAD_ENABLE_NEW_CONNECTIONS);
 }
 
 void process_controller(int idx, ControllerPtr ctl) {

@@ -10,7 +10,17 @@
  */
 
 #include "esp_system.h"
-#include "esp_spiffs.h"
+#include "src/config.h"
+#include <dirent.h>
+#include <string.h>
+#include <ctype.h>
+#include <string>
+#include <FS.h>
+#include <SPIFFS.h>
+#include <SD.h>
+#include <SD_MMC.h>
+#include <FFat.h>
+#include <SPI.h>
 
 // Include Arduino helpers for CPU frequency management.  These
 // functions (setCpuFrequencyMhz() and getCpuFrequencyMhz()) are
@@ -26,7 +36,7 @@
 // bluepad_setup() and bluepad_update() functions used below.
 #include "bluepad_adapter.h"
 
-//  Choose one of the video standards: PAL,NTSC
+//  Choose one of the video standards: PAL,NTSCc:\Users\turlo\Documents\GitHub\esp_8_bit\src\config.h
 #define VIDEO_STANDARD NTSC
 
 //  Choose one of the following emulators: EMU_NES,EMU_SMS,EMU_ATARI
@@ -46,9 +56,28 @@ uint32_t _frame_time = 0;
 uint32_t _drawn = 1;
 bool _inited = false;
 
+static std::string normalized_fs_root()
+{
+  std::string root = FSROOT;
+  if (root.empty())
+    root = "/";
+  if (root.front() != '/')
+    root.insert(root.begin(), '/');
+  if (root.size() > 1 && root.back() == '/')
+    root.pop_back();
+  return root;
+}
+
+static std::string fs_join(const std::string& base, const std::string& child)
+{
+  if (base.empty() || base == "/")
+    return "/" + child;
+  return base + "/" + child;
+}
+
 void emu_init()
 {
-    std::string folder = "/" + _emu->name;
+    std::string folder = fs_join(normalized_fs_root(), _emu->name);
     gui_start(_emu,folder.c_str());
     _drawn = _frame_counter;
 }
@@ -81,20 +110,47 @@ void emu_task(void* arg)
 
 esp_err_t mount_filesystem()
 {
-  printf("\n\n\nesp_8_bit\n\nmounting spiffs (will take ~15 seconds if formatting for the first time)....\n");
-  uint32_t t = millis();
-  esp_vfs_spiffs_conf_t conf = {
-    .base_path = "",
-    .partition_label = NULL,
-    .max_files = 5,
-    .format_if_mount_failed = true  // force?
-  };
-  esp_err_t e = esp_vfs_spiffs_register(&conf);
-  if (e != 0)
-    printf("Failed to mount or format filesystem: %d. Use 'ESP32 Sketch Data Upload' from 'Tools' menu\n",e);
+  printf("\n\n\nesp_8_bit\n\nmounting filesystem at %s...\n", FSROOT);
+  uint32_t start = millis();
+  bool mounted = false;
+  const char* fs_name = "FS";
+
+#if FILESYSTEM_IMPL == FILESYSTEM_SPIFFS
+  fs_name = "SPIFFS";
+  mounted = SPIFFS.begin(FILESYSTEM_SPIFFS_FORMAT_ON_FAIL, FSROOT);
+#elif FILESYSTEM_IMPL == FILESYSTEM_FFAT
+  fs_name = "FFat";
+  mounted = FFat.begin(FILESYSTEM_FFAT_FORMAT_ON_FAIL, FSROOT);
+#elif FILESYSTEM_IMPL == FILESYSTEM_SD_MMC_1BIT
+  fs_name = "SD_MMC (1-bit)";
+  mounted = SD_MMC.begin(FSROOT, true);
+  if (!mounted)
+    mounted = SD_MMC.begin(FSROOT, true);
+#elif FILESYSTEM_IMPL == FILESYSTEM_SD_MMC_4BIT
+  fs_name = "SD_MMC (4-bit)";
+  mounted = SD_MMC.begin(FSROOT, false);
+  if (!mounted)
+    mounted = SD_MMC.begin(FSROOT, false);
+#elif FILESYSTEM_IMPL == FILESYSTEM_SD_SPI_DEFAULT
+  fs_name = "SD (SPI default)";
+  mounted = SD.begin(FILESYSTEM_SD_SPI_DEFAULT_SS, SPI, FILESYSTEM_SD_SPI_DEFAULT_FREQ_HZ, FSROOT);
+#elif FILESYSTEM_IMPL == FILESYSTEM_SD_SPI_CUSTOM
+  fs_name = "SD (SPI custom)";
+  static SPIClass spi(FILESYSTEM_SD_SPI_BUS);
+  spi.begin(FILESYSTEM_SD_SPI_SCLK, FILESYSTEM_SD_SPI_MISO, FILESYSTEM_SD_SPI_MOSI, FILESYSTEM_SD_SPI_CS);
+  mounted = SD.begin(FILESYSTEM_SD_SPI_CS, spi, FILESYSTEM_SD_SPI_FREQ_HZ, FSROOT);
+#else
+#error Unknown FILESYSTEM_IMPL selection
+#endif
+
+  if (!mounted) {
+    printf("Failed to mount %s. Please check filesystem settings or media.\n", fs_name);
+    return ESP_FAIL;
+  }
+
   vTaskDelay(1);
-  printf("... mounted in %d ms\n",millis()-t);
-  return e;
+  printf("... %s mounted in %d ms\n", fs_name, millis()-start);
+  return ESP_OK;
 }
 
 void setup()
@@ -103,7 +159,12 @@ void setup()
   // function was removed from modern ESP32 Arduino cores; use
   // setCpuFrequencyMhz() instead.
   setCpuFrequencyMhz(240);
-  mount_filesystem();                       // mount the filesystem!
+  if (mount_filesystem() != ESP_OK) {
+    printf("Filesystem mount failed. Stopping setup.\n");
+    while (true) {
+      delay(1000);
+    }
+  }
   _emu = NewEmulator();                     // create the emulator!
   bluepad_setup();                          // initialise Bluepad32 for gamepad support
 
