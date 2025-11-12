@@ -17,7 +17,9 @@
 
 #include "config.h"
 
+#ifndef VIDEO_PIN
 #define VIDEO_PIN   26
+#endif
 #ifndef AUDIO_PIN
 #define AUDIO_PIN   18  // can be any pin
 #endif

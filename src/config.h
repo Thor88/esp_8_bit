@@ -25,6 +25,11 @@
 #define AUDIO_PIN 26
 #endif
 
+// Video pin (composite out)
+#ifndef VIDEO_PIN
+#define VIDEO_PIN 25
+#endif
+
 // Keycode mappings used by GUI and adapters
 #define KEYCODE_UP            82
 #define KEYCODE_DOWN          81
@@ -44,11 +49,16 @@
 #define BLUEPAD_ENABLE_NEW_CONNECTIONS 1
 #endif
 #ifndef BLUEPAD_FORGET_KEYS_ON_BOOT
-#define BLUEPAD_FORGET_KEYS_ON_BOOT 1
+#define BLUEPAD_FORGET_KEYS_ON_BOOT 0
 #endif
+
+#ifndef BLUEPAD_WAIT_FOR_CONNECTION
+#define BLUEPAD_WAIT_FOR_CONNECTION 0   // block in setup until controller connects
+#endif
+
 // Filesystem selection (mirrors Arduino nofrendo's hw_config)
 #ifndef FSROOT
-#define FSROOT "/"
+#define FSROOT "/spiff"
 #endif
 
 #define FILESYSTEM_SPIFFS            0
@@ -59,7 +69,7 @@
 #define FILESYSTEM_SD_SPI_CUSTOM     5
 
 #ifndef FILESYSTEM_IMPL
-#define FILESYSTEM_IMPL FILESYSTEM_SD_SPI_DEFAULT
+#define FILESYSTEM_IMPL FILESYSTEM_SD_SPI_CUSTOM
 #endif
 
 #ifndef FILESYSTEM_SPIFFS_FORMAT_ON_FAIL
@@ -81,16 +91,16 @@
 #define FILESYSTEM_SD_SPI_BUS HSPI
 #endif
 #ifndef FILESYSTEM_SD_SPI_CS
-#define FILESYSTEM_SD_SPI_CS 5
+#define FILESYSTEM_SD_SPI_CS 13
 #endif
 #ifndef FILESYSTEM_SD_SPI_SCLK
-#define FILESYSTEM_SD_SPI_SCLK 18
+#define FILESYSTEM_SD_SPI_SCLK 14
 #endif
 #ifndef FILESYSTEM_SD_SPI_MISO
-#define FILESYSTEM_SD_SPI_MISO 19
+#define FILESYSTEM_SD_SPI_MISO 2
 #endif
 #ifndef FILESYSTEM_SD_SPI_MOSI
-#define FILESYSTEM_SD_SPI_MOSI 23
+#define FILESYSTEM_SD_SPI_MOSI 15
 #endif
 #ifndef FILESYSTEM_SD_SPI_FREQ_HZ
 #define FILESYSTEM_SD_SPI_FREQ_HZ 8000000

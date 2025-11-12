@@ -75,9 +75,23 @@ static std::string fs_join(const std::string& base, const std::string& child)
   return base + "/" + child;
 }
 
+static const char* fs_impl_name()
+{
+  switch (FILESYSTEM_IMPL) {
+    case FILESYSTEM_SPIFFS: return "SPIFFS";
+    case FILESYSTEM_FFAT: return "FFat";
+    case FILESYSTEM_SD_MMC_1BIT: return "SD_MMC_1BIT";
+    case FILESYSTEM_SD_MMC_4BIT: return "SD_MMC_4BIT";
+    case FILESYSTEM_SD_SPI_DEFAULT: return "SD_SPI_DEFAULT";
+    case FILESYSTEM_SD_SPI_CUSTOM: return "SD_SPI_CUSTOM";
+    default: return "UNKNOWN";
+  }
+}
+
 void emu_init()
 {
     std::string folder = fs_join(normalized_fs_root(), _emu->name);
+    printf("emu_init: folder=%s\n", folder.c_str());
     gui_start(_emu,folder.c_str());
     _drawn = _frame_counter;
 }
@@ -110,7 +124,7 @@ void emu_task(void* arg)
 
 esp_err_t mount_filesystem()
 {
-  printf("\n\n\nesp_8_bit\n\nmounting filesystem at %s...\n", FSROOT);
+  printf("\n\n\nesp_8_bit\n\nmounting filesystem impl=%s at %s...\n", fs_impl_name(), FSROOT);
   uint32_t start = millis();
   bool mounted = false;
   const char* fs_name = "FS";
@@ -133,10 +147,18 @@ esp_err_t mount_filesystem()
     mounted = SD_MMC.begin(FSROOT, false);
 #elif FILESYSTEM_IMPL == FILESYSTEM_SD_SPI_DEFAULT
   fs_name = "SD (SPI default)";
+  printf("mount_filesystem: VSPI default SS=%d freq=%dHz\n", FILESYSTEM_SD_SPI_DEFAULT_SS, FILESYSTEM_SD_SPI_DEFAULT_FREQ_HZ);
   mounted = SD.begin(FILESYSTEM_SD_SPI_DEFAULT_SS, SPI, FILESYSTEM_SD_SPI_DEFAULT_FREQ_HZ, FSROOT);
 #elif FILESYSTEM_IMPL == FILESYSTEM_SD_SPI_CUSTOM
   fs_name = "SD (SPI custom)";
   static SPIClass spi(FILESYSTEM_SD_SPI_BUS);
+  printf("mount_filesystem: custom bus=%d CS=%d SCLK=%d MISO=%d MOSI=%d freq=%dHz\n",
+         FILESYSTEM_SD_SPI_BUS,
+         FILESYSTEM_SD_SPI_CS,
+         FILESYSTEM_SD_SPI_SCLK,
+         FILESYSTEM_SD_SPI_MISO,
+         FILESYSTEM_SD_SPI_MOSI,
+         FILESYSTEM_SD_SPI_FREQ_HZ);
   spi.begin(FILESYSTEM_SD_SPI_SCLK, FILESYSTEM_SD_SPI_MISO, FILESYSTEM_SD_SPI_MOSI, FILESYSTEM_SD_SPI_CS);
   mounted = SD.begin(FILESYSTEM_SD_SPI_CS, spi, FILESYSTEM_SD_SPI_FREQ_HZ, FSROOT);
 #else
@@ -158,6 +180,7 @@ void setup()
   // Set the CPU frequency to 240 MHz.  The rtc_clk_cpu_freq_set()
   // function was removed from modern ESP32 Arduino cores; use
   // setCpuFrequencyMhz() instead.
+  printf("setup: begin, FSROOT=%s impl=%s\n", FSROOT, fs_impl_name());
   setCpuFrequencyMhz(240);
   if (mount_filesystem() != ESP_OK) {
     printf("Filesystem mount failed. Stopping setup.\n");
@@ -166,13 +189,20 @@ void setup()
     }
   }
   _emu = NewEmulator();                     // create the emulator!
+  printf("setup: emulator %s created\n", _emu->name.c_str());
   bluepad_setup();                          // initialise Bluepad32 for gamepad support
+#if BLUEPAD_WAIT_FOR_CONNECTION
+  if (!bluepad_wait_for_connection(BLUEPAD_WAIT_TIMEOUT_MS)) {
+    printf("setup: continuing without controller after timeout\n");
+  }
+#endif
 
   #ifdef SINGLE_CORE
   emu_init();
   video_init(_emu->cc_width,_emu->flavor,_emu->composite_palette(),_emu->standard); // start the A/V pump on app core
   #else
   xTaskCreatePinnedToCore(emu_task, "emu_task", EMULATOR == EMU_NES ? 5*1024 : 3*1024, NULL, 0, NULL, 0); // nofrendo needs 5k word stack, start on core 0
+  printf("setup: emu_task launched\n");
   #endif
 }
 
