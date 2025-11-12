@@ -177,34 +177,42 @@ esp_err_t mount_filesystem()
 
 void setup()
 {
-  // Set the CPU frequency to 240 MHz.  The rtc_clk_cpu_freq_set()
-  // function was removed from modern ESP32 Arduino cores; use
-  // setCpuFrequencyMhz() instead.
   printf("setup: begin, FSROOT=%s impl=%s\n", FSROOT, fs_impl_name());
   setCpuFrequencyMhz(240);
-  if (mount_filesystem() != ESP_OK) {
-    printf("Filesystem mount failed. Stopping setup.\n");
-    while (true) {
-      delay(1000);
-    }
-  }
-  _emu = NewEmulator();                     // create the emulator!
-  printf("setup: emulator %s created\n", _emu->name.c_str());
-  bluepad_setup();                          // initialise Bluepad32 for gamepad support
+
+  // 1) Bring up Bluepad32 BEFORE any filesystem mounts
+  bluepad_setup();
 #if BLUEPAD_WAIT_FOR_CONNECTION
   if (!bluepad_wait_for_connection(BLUEPAD_WAIT_TIMEOUT_MS)) {
     printf("setup: continuing without controller after timeout\n");
   }
 #endif
 
-  #ifdef SINGLE_CORE
+  // (Optional but useful) show heap headroom before mounting SD
+  printf("heap before FS mount: %u\n", ESP.getFreeHeap());
+
+  // 2) Now mount the filesystem (SD/SPIFFS/FFat/etc.)
+  if (mount_filesystem() != ESP_OK) {
+    printf("Filesystem mount failed. Stopping setup.\n");
+    while (true) { delay(1000); }
+  }
+
+  printf("heap after  FS mount: %u\n", ESP.getFreeHeap());
+
+  // 3) Create emulator AFTER FS is available
+  _emu = NewEmulator();
+  printf("setup: emulator %s created\n", _emu->name.c_str());
+
+#ifdef SINGLE_CORE
   emu_init();
-  video_init(_emu->cc_width,_emu->flavor,_emu->composite_palette(),_emu->standard); // start the A/V pump on app core
-  #else
-  xTaskCreatePinnedToCore(emu_task, "emu_task", EMULATOR == EMU_NES ? 5*1024 : 3*1024, NULL, 0, NULL, 0); // nofrendo needs 5k word stack, start on core 0
+  video_init(_emu->cc_width,_emu->flavor,_emu->composite_palette(),_emu->standard);
+#else
+  xTaskCreatePinnedToCore(emu_task, "emu_task",
+      EMULATOR == EMU_NES ? 5*1024 : 3*1024, NULL, 0, NULL, 0);
   printf("setup: emu_task launched\n");
-  #endif
+#endif
 }
+
 
 #ifdef PERF
 void perf()
